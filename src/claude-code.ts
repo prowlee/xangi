@@ -4,6 +4,7 @@ import type { RunOptions, RunResult, StreamCallbacks } from './agent-runner.js';
 import { mergeTexts, sanitizeSurrogates } from './agent-runner.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
 import { buildSystemPrompt } from './base-runner.js';
+import { logPrompt, logResponse } from './transcript-logger.js';
 
 export interface ClaudeCodeOptions {
   model?: string;
@@ -68,8 +69,21 @@ export class ClaudeCodeRunner {
       : ' (new)';
     console.log(`[claude-code] Executing in ${this.workdir || 'default dir'}${sessionInfo}`);
 
+    // トランスクリプトログ: 送信プロンプトを記録
+    if (options?.channelId && this.workdir) {
+      logPrompt(this.workdir, options.channelId, prompt, options?.sessionId);
+    }
+
     const result = await this.execute(args, options?.channelId);
     const response = this.parseResponse(result);
+
+    // トランスクリプトログ: 応答を記録
+    if (options?.channelId && this.workdir) {
+      logResponse(this.workdir, options.channelId, {
+        result: response.result,
+        sessionId: response.session_id,
+      });
+    }
 
     return {
       result: response.result,

@@ -126,6 +126,7 @@ docker exec -it xangi claude
 | `IDLE_TIMEOUT_MS` | アイドルプロセスの自動終了時間（ミリ秒） | `1800000`（30分） |
 | `GH_TOKEN` | GitHub CLI用トークン | - |
 | `INJECT_CHANNEL_TOPIC` | チャンネルトピックをプロンプトに注入 | `true` |
+| `INJECT_TIMESTAMP` | 現在時刻をプロンプトに注入 | `true` |
 
 全ての環境変数は [設計ドキュメント](docs/design.md) を参照してください。
 

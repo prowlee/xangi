@@ -63,7 +63,7 @@ export class RunnerManager implements AgentRunner {
     }
 
     // 新しい PersistentRunner を作成
-    const runner = new PersistentRunner(this.agentConfig);
+    const runner = new PersistentRunner({ ...this.agentConfig, channelId });
     this.pool.set(channelId, {
       runner,
       lastUsed: Date.now(),

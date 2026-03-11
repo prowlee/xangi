@@ -24,6 +24,7 @@ export interface Config {
     streaming?: boolean;
     showThinking?: boolean;
     injectChannelTopic?: boolean;
+    injectTimestamp?: boolean;
   };
   slack: {
     enabled: boolean;
@@ -93,6 +94,7 @@ export function loadConfig(): Config {
       streaming: process.env.DISCORD_STREAMING !== 'false',
       showThinking: process.env.DISCORD_SHOW_THINKING !== 'false',
       injectChannelTopic: process.env.INJECT_CHANNEL_TOPIC !== 'false', // デフォルトON
+      injectTimestamp: process.env.INJECT_TIMESTAMP !== 'false', // デフォルトON
     },
     slack: {
       enabled: !!slackBotToken && !!slackAppToken,

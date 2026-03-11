@@ -1216,6 +1216,14 @@ async function main() {
       }
     }
 
+    // タイムスタンプをプロンプトの先頭に注入
+    if (config.discord.injectTimestamp !== false) {
+      const d = new Date();
+      const now = d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+      const day = d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', weekday: 'short' });
+      prompt = `[現在時刻: ${now}(${day})]\n${prompt}`;
+    }
+
     processingChannels.add(channelId);
     try {
       const result = await processPrompt(
@@ -1298,8 +1306,17 @@ async function main() {
       ).send('🤔 考え中...');
 
       try {
+        // タイムスタンプをプロンプトの先頭に注入
+        let agentPrompt = remainingPrompt;
+        if (config.discord.injectTimestamp !== false) {
+          const d = new Date();
+          const now = d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+          const day = d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', weekday: 'short' });
+          agentPrompt = `[現在時刻: ${now}(${day})]\n${agentPrompt}`;
+        }
+
         const sessionId = getSession(channelId);
-        const { result, sessionId: newSessionId } = await agentRunner.run(remainingPrompt, {
+        const { result, sessionId: newSessionId } = await agentRunner.run(agentPrompt, {
           skipPermissions: config.agent.config.skipPermissions ?? false,
           sessionId,
           channelId,
