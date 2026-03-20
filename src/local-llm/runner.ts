@@ -11,6 +11,7 @@ import { LLMClient } from './llm-client.js';
 import { loadWorkspaceContext } from './context.js';
 import { getBuiltinTools, toLLMTools, executeTool } from './tools.js';
 import { loadSkills } from '../skills.js';
+import { CHAT_SYSTEM_PROMPT_PERSISTENT, loadXangiCommands } from '../base-runner.js';
 
 const MAX_TOOL_ROUNDS = 10;
 const MAX_SESSION_MESSAGES = 50;
@@ -26,6 +27,7 @@ export class LocalLlmRunner implements AgentRunner {
   private readonly workdir: string;
   private readonly sessions = new Map<string, Session>();
   private readonly sessionTtlMs = 60 * 60 * 1000; // 1時間
+  private readonly activeAbortControllers = new Map<string, AbortController>();
 
   constructor(config: AgentConfig) {
     const baseUrl = (process.env.LOCAL_LLM_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
@@ -35,8 +37,11 @@ export class LocalLlmRunner implements AgentRunner {
     const maxTokens = process.env.LOCAL_LLM_MAX_TOKENS
       ? parseInt(process.env.LOCAL_LLM_MAX_TOKENS, 10)
       : 8192;
+    const numCtx = process.env.LOCAL_LLM_NUM_CTX
+      ? parseInt(process.env.LOCAL_LLM_NUM_CTX, 10)
+      : undefined;
 
-    this.llm = new LLMClient(baseUrl, model, apiKey, thinking, maxTokens);
+    this.llm = new LLMClient(baseUrl, model, apiKey, thinking, maxTokens, numCtx);
     this.workdir = config.workdir || process.cwd();
 
     console.log(`[local-llm] LLM: ${baseUrl} (model: ${model}, thinking: ${thinking})`);
@@ -84,11 +89,17 @@ export class LocalLlmRunner implements AgentRunner {
       const toolContext = { workspace: this.workdir, channelId: options?.channelId };
 
       for (const toolCall of response.toolCalls) {
+        console.log(
+          `[local-llm] Tool call: ${toolCall.name}(${JSON.stringify(toolCall.arguments).slice(0, 200)})`
+        );
         const result = await executeTool(toolCall.name, toolCall.arguments, toolContext);
         const toolResultContent = result.success
           ? result.output
           : `Error: ${result.error ?? 'Unknown error'}${result.output ? `\nOutput: ${result.output}` : ''}`;
 
+        console.log(
+          `[local-llm] Tool result: ${result.success ? 'OK' : 'FAIL'} (${toolResultContent.length} chars)`
+        );
         session.messages.push({
           role: 'tool',
           content: toolResultContent,
@@ -119,12 +130,63 @@ export class LocalLlmRunner implements AgentRunner {
 
     const session = this.getOrCreateSession(sessionId);
     const systemPrompt = this.buildSystemPrompt();
+    const tools = getBuiltinTools();
+    const llmTools = toLLMTools(tools);
 
     session.messages.push({ role: 'user', content: prompt });
 
+    const channelId = options?.channelId || sessionId;
+    const abortController = new AbortController();
+    this.activeAbortControllers.set(channelId, abortController);
+
     try {
+      // ツールループ: non-streaming の chat() でツール呼び出しを処理
+      let toolRounds = 0;
+      while (toolRounds < MAX_TOOL_ROUNDS) {
+        const response = await this.llm.chat(session.messages, {
+          systemPrompt,
+          tools: llmTools.length > 0 ? llmTools : undefined,
+          signal: abortController.signal,
+        });
+
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          break;
+        }
+
+        // ツール呼び出し処理
+        session.messages.push({
+          role: 'assistant',
+          content: response.content ?? '',
+          toolCalls: response.toolCalls,
+        });
+
+        const toolContext = { workspace: this.workdir, channelId: options?.channelId };
+        for (const toolCall of response.toolCalls) {
+          console.log(
+            `[local-llm] Tool call: ${toolCall.name}(${JSON.stringify(toolCall.arguments).slice(0, 200)})`
+          );
+          const result = await executeTool(toolCall.name, toolCall.arguments, toolContext);
+          const toolResultContent = result.success
+            ? result.output
+            : `Error: ${result.error ?? 'Unknown error'}${result.output ? `\nOutput: ${result.output}` : ''}`;
+          console.log(
+            `[local-llm] Tool result: ${result.success ? 'OK' : 'FAIL'} (${toolResultContent.length} chars)`
+          );
+          session.messages.push({
+            role: 'tool',
+            content: toolResultContent,
+            toolCallId: toolCall.id,
+          });
+        }
+        toolRounds++;
+      }
+
+      // 最終応答をストリーミングで取得
       let fullText = '';
-      for await (const chunk of this.llm.chatStream(session.messages, { systemPrompt })) {
+      for await (const chunk of this.llm.chatStream(session.messages, {
+        systemPrompt,
+        signal: abortController.signal,
+      })) {
         fullText += chunk;
         callbacks.onText?.(chunk, fullText);
       }
@@ -140,11 +202,29 @@ export class LocalLlmRunner implements AgentRunner {
       const error = err instanceof Error ? err : new Error(String(err));
       callbacks.onError?.(error);
       throw error;
+    } finally {
+      this.activeAbortControllers.delete(channelId);
     }
   }
 
-  cancel(): boolean {
-    return true;
+  cancel(channelId?: string): boolean {
+    if (channelId) {
+      const controller = this.activeAbortControllers.get(channelId);
+      if (controller) {
+        controller.abort();
+        this.activeAbortControllers.delete(channelId);
+        return true;
+      }
+    }
+    // channelId不明の場合は全部止める
+    if (this.activeAbortControllers.size > 0) {
+      for (const [id, controller] of this.activeAbortControllers) {
+        controller.abort();
+        this.activeAbortControllers.delete(id);
+      }
+      return true;
+    }
+    return false;
   }
 
   destroy(channelId: string): boolean {
@@ -156,15 +236,24 @@ export class LocalLlmRunner implements AgentRunner {
   private buildSystemPrompt(): string {
     const parts: string[] = [];
 
+    // チャットプラットフォーム説明 + xangiコマンド（base-runner共通）
+    parts.push(CHAT_SYSTEM_PROMPT_PERSISTENT + loadXangiCommands());
+
     // ワークスペースコンテキスト（CLAUDE.md, AGENTS.md, MEMORY.md）
     const context = loadWorkspaceContext(this.workdir);
     if (context) parts.push(context);
 
-    // スキル一覧
+    // スキル一覧と使い方
     const skills = loadSkills(this.workdir);
     if (skills.length > 0) {
       const skillList = skills.map((s) => `- ${s.name}: ${s.description}`).join('\n');
-      parts.push(`## Available Skills\n${skillList}`);
+      parts.push(
+        `## Available Skills\n${skillList}\n\n` +
+          `### How to use skills\n` +
+          `1. Use the \`read\` tool to read the skill's SKILL.md file (e.g. \`skills/<skill-name>/SKILL.md\`)\n` +
+          `2. Follow the instructions in SKILL.md to execute the skill using the \`exec\` tool\n` +
+          `3. When a user's request matches a skill's description, always use that skill instead of answering from memory`
+      );
     }
 
     return parts.join('\n\n');

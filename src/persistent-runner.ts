@@ -3,6 +3,7 @@ import { EventEmitter } from 'events';
 import type { RunOptions, RunResult, StreamCallbacks, AgentRunner } from './agent-runner.js';
 import { mergeTexts, sanitizeSurrogates } from './agent-runner.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
+import { getSafeEnv } from './base-runner.js';
 import { buildPersistentSystemPrompt } from './base-runner.js';
 import { logPrompt, logResponse, logError } from './transcript-logger.js';
 
@@ -117,6 +118,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
     this.process = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: this.workdir,
+      env: getSafeEnv(),
     });
     this.processAlive = true;
 

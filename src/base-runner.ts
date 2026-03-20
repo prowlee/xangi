@@ -76,3 +76,6 @@ export function buildSystemPrompt(): string {
 export function buildPersistentSystemPrompt(): string {
   return CHAT_SYSTEM_PROMPT_PERSISTENT + loadXangiCommands();
 }
+
+// safe-env.ts から再エクスポート（既存のimportを壊さないため）
+export { getSafeEnv } from './safe-env.js';

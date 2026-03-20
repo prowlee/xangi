@@ -96,22 +96,28 @@ const lastSentMessageIds = new Map<string, string>();
 async function main() {
   const config = loadConfig();
 
-  // 許可リストの必須チェック（各プラットフォームで1人のみ許可）
+  // 許可リストのチェック（"*" で全員許可、カンマ区切りで複数ユーザー対応）
   const discordAllowed = config.discord.allowedUsers || [];
   const slackAllowed = config.slack.allowedUsers || [];
 
   if (config.discord.enabled && discordAllowed.length === 0) {
-    console.error('[xangi] Error: ALLOWED_USER must be set for Discord');
+    console.error('[xangi] Error: DISCORD_ALLOWED_USER must be set (use "*" to allow everyone)');
     process.exit(1);
   }
   if (config.slack.enabled && slackAllowed.length === 0) {
-    console.error('[xangi] Error: SLACK_ALLOWED_USER or ALLOWED_USER must be set for Slack');
+    console.error('[xangi] Error: SLACK_ALLOWED_USER must be set (use "*" to allow everyone)');
     process.exit(1);
   }
-  if (discordAllowed.length > 1 || slackAllowed.length > 1) {
-    console.error('[xangi] Error: Only one user per platform is allowed');
-    console.error('[xangi] 利用規約遵守のため、複数ユーザーの設定は禁止です');
-    process.exit(1);
+
+  if (discordAllowed.includes('*')) {
+    console.log('[xangi] Discord: All users are allowed');
+  } else {
+    console.log(`[xangi] Discord: Allowed users: ${discordAllowed.join(', ')}`);
+  }
+  if (slackAllowed.includes('*')) {
+    console.log('[xangi] Slack: All users are allowed');
+  } else if (slackAllowed.length > 0) {
+    console.log(`[xangi] Slack: Allowed users: ${slackAllowed.join(', ')}`);
   }
 
   const client = new Client({
@@ -261,8 +267,11 @@ async function main() {
 
     if (!interaction.isChatInputCommand()) return;
 
-    // 許可リストチェック
-    if (!config.discord.allowedUsers?.includes(interaction.user.id)) {
+    // 許可リストチェック（"*" で全員許可）
+    if (
+      !config.discord.allowedUsers?.includes('*') &&
+      !config.discord.allowedUsers?.includes(interaction.user.id)
+    ) {
       await interaction.reply({ content: '許可されていないユーザーです', ephemeral: true });
       return;
     }
@@ -1126,7 +1135,10 @@ async function main() {
       return;
     }
 
-    if (!config.discord.allowedUsers?.includes(message.author.id)) {
+    if (
+      !config.discord.allowedUsers?.includes('*') &&
+      !config.discord.allowedUsers?.includes(message.author.id)
+    ) {
       console.log(`[xangi] Unauthorized user: ${message.author.id} (${message.author.tag})`);
       return;
     }
@@ -1315,14 +1327,16 @@ async function main() {
           agentPrompt = `[現在時刻: ${now}(${day})]\n${agentPrompt}`;
         }
 
-        const sessionId = getSession(channelId);
+        // スケジューラーは毎回新規セッション（stateless）
+        // 会話の文脈継続は不要で、古いセッションIDによるresume失敗を防ぐ
         const { result, sessionId: newSessionId } = await agentRunner.run(agentPrompt, {
           skipPermissions: config.agent.config.skipPermissions ?? false,
-          sessionId,
+          sessionId: undefined,
           channelId,
         });
 
-        setSession(channelId, newSessionId);
+        // スケジューラーのセッションは scheduler スコープで保存
+        setSession(channelId, newSessionId, 'scheduler');
 
         // AI応答内の !discord コマンドを処理（sourceMessage なし、channelIdをフォールバック）
         const feedbackResults = await handleDiscordCommandsInResponse(result, undefined, channelId);
@@ -1333,13 +1347,14 @@ async function main() {
           console.log(
             `[scheduler] Re-injecting ${feedbackResults.length} feedback result(s) to agent`
           );
+          // フィードバックは直前のスケジューラーセッションを使う（同一タスク内の文脈継続）
           const feedbackSession = getSession(channelId);
           const feedbackRun = await agentRunner.run(feedbackPrompt, {
             skipPermissions: config.agent.config.skipPermissions ?? false,
             sessionId: feedbackSession,
             channelId,
           });
-          setSession(channelId, feedbackRun.sessionId);
+          setSession(channelId, feedbackRun.sessionId, 'scheduler');
           // 再注入後の応答にもコマンドがあれば処理
           await handleDiscordCommandsInResponse(feedbackRun.result, undefined, channelId);
         }
@@ -1692,11 +1707,14 @@ async function processPrompt(
 ): Promise<string | null> {
   let replyMessage: Message | null = null;
   try {
-    // チャンネル情報をプロンプトに付与
+    // チャンネル・ユーザー情報をプロンプトに付与
     const channelName =
       'name' in message.channel ? (message.channel as { name: string }).name : null;
+    const userInfo = `[発言者: ${message.author.displayName ?? message.author.username} (ID: ${message.author.id})]`;
     if (channelName) {
-      prompt = `[チャンネル: #${channelName} (ID: ${channelId})]\n${prompt}`;
+      prompt = `[チャンネル: #${channelName} (ID: ${channelId})]\n${userInfo}\n${prompt}`;
+    } else {
+      prompt = `${userInfo}\n${prompt}`;
     }
 
     console.log(`[xangi] Processing message in channel ${channelId}`);

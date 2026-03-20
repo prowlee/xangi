@@ -238,7 +238,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     if (!userId) return;
 
     // 許可リストチェック
-    if (!config.slack.allowedUsers?.includes(userId)) {
+    if (!config.slack.allowedUsers?.includes('*') && !config.slack.allowedUsers?.includes(userId)) {
       console.log(`[slack] Unauthorized user: ${userId}`);
       return;
     }
@@ -350,7 +350,10 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     }
 
     // 許可リストチェック
-    if (!config.slack.allowedUsers?.includes(messageEvent.user)) {
+    if (
+      !config.slack.allowedUsers?.includes('*') &&
+      !config.slack.allowedUsers?.includes(messageEvent.user)
+    ) {
       console.log(`[slack] Unauthorized user: ${messageEvent.user}`);
       return;
     }
@@ -429,7 +432,10 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
   app.command('/new', async ({ command, ack, respond }) => {
     await ack();
 
-    if (!config.slack.allowedUsers?.includes(command.user_id)) {
+    if (
+      !config.slack.allowedUsers?.includes('*') &&
+      !config.slack.allowedUsers?.includes(command.user_id)
+    ) {
       await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
       return;
     }
@@ -442,7 +448,10 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
   app.command('/skills', async ({ command, ack, respond }) => {
     await ack();
 
-    if (!config.slack.allowedUsers?.includes(command.user_id)) {
+    if (
+      !config.slack.allowedUsers?.includes('*') &&
+      !config.slack.allowedUsers?.includes(command.user_id)
+    ) {
       await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
       return;
     }
@@ -457,7 +466,10 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
   app.command('/delete', async ({ command, ack, respond, client }) => {
     await ack();
 
-    if (!config.slack.allowedUsers?.includes(command.user_id)) {
+    if (
+      !config.slack.allowedUsers?.includes('*') &&
+      !config.slack.allowedUsers?.includes(command.user_id)
+    ) {
       await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
       return;
     }
@@ -470,7 +482,10 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
   app.command('/skill', async ({ command, ack, respond }) => {
     await ack();
 
-    if (!config.slack.allowedUsers?.includes(command.user_id)) {
+    if (
+      !config.slack.allowedUsers?.includes('*') &&
+      !config.slack.allowedUsers?.includes(command.user_id)
+    ) {
       await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
       return;
     }
@@ -508,7 +523,10 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
   app.command('/settings', async ({ command, ack, respond }) => {
     await ack();
 
-    if (!config.slack.allowedUsers?.includes(command.user_id)) {
+    if (
+      !config.slack.allowedUsers?.includes('*') &&
+      !config.slack.allowedUsers?.includes(command.user_id)
+    ) {
       await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
       return;
     }
@@ -521,7 +539,10 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
   app.command('/restart', async ({ command, ack, respond }) => {
     await ack();
 
-    if (!config.slack.allowedUsers?.includes(command.user_id)) {
+    if (
+      !config.slack.allowedUsers?.includes('*') &&
+      !config.slack.allowedUsers?.includes(command.user_id)
+    ) {
       await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
       return;
     }

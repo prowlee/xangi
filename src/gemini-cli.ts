@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { processManager } from './process-manager.js';
 import type { AgentRunner, RunOptions, RunResult, StreamCallbacks } from './agent-runner.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
+import { getSafeEnv, buildSystemPrompt } from './base-runner.js';
 import type { BaseRunnerOptions } from './base-runner.js';
 import { logPrompt, logResponse } from './transcript-logger.js';
 
@@ -52,7 +53,6 @@ export class GeminiRunner implements AgentRunner {
     this.timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.workdir = options?.workdir;
     this.skipPermissions = options?.skipPermissions ?? false;
-    // Gemini CLIはGEMINI.mdを自動読み込みするため、xangi側でのシステムプロンプト注入は不要
   }
 
   /**
@@ -79,7 +79,8 @@ export class GeminiRunner implements AgentRunner {
   }
 
   async run(prompt: string, options?: RunOptions): Promise<RunResult> {
-    const fullPrompt = prompt;
+    const systemPrompt = buildSystemPrompt();
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : prompt;
     const args = [
       ...this.buildBaseArgs(options),
       '--prompt',
@@ -153,6 +154,7 @@ export class GeminiRunner implements AgentRunner {
       const proc = spawn('gemini', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: this.workdir,
+        env: getSafeEnv(),
       });
       this.currentProcess = proc;
 
@@ -225,7 +227,8 @@ export class GeminiRunner implements AgentRunner {
     callbacks: StreamCallbacks,
     options?: RunOptions
   ): Promise<RunResult> {
-    const fullPrompt = prompt;
+    const systemPrompt = buildSystemPrompt();
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : prompt;
     const args = [
       ...this.buildBaseArgs(options),
       '--prompt',
@@ -272,6 +275,7 @@ export class GeminiRunner implements AgentRunner {
       const proc = spawn('gemini', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: this.workdir,
+        env: getSafeEnv(),
       });
       this.currentProcess = proc;
 

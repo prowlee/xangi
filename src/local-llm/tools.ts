@@ -5,11 +5,12 @@ import { readFileSync, existsSync, statSync } from 'fs';
 import { resolve, join } from 'path';
 import { promisify } from 'util';
 import type { LLMTool, ToolContext, ToolResult, ToolHandler } from './types.js';
+import { getSafeEnv } from '../safe-env.js';
 
 // child_process を遅延ロード（テストのvi.mockとの衝突を避けるため）
 async function shellExec(
   command: string,
-  options: { cwd?: string; timeout?: number; maxBuffer?: number }
+  options: { cwd?: string; timeout?: number; maxBuffer?: number; env?: NodeJS.ProcessEnv }
 ): Promise<{ stdout: string; stderr: string }> {
   const cp = await import('child_process');
   const execAsync = promisify(cp.exec);
@@ -55,6 +56,7 @@ const execToolHandler: ToolHandler = {
         cwd,
         timeout: 30_000,
         maxBuffer: 1024 * 1024,
+        env: getSafeEnv(),
       });
       return { success: true, output: [stdout, stderr].filter(Boolean).join('\n').trim() };
     } catch (err) {
@@ -94,6 +96,14 @@ const readToolHandler: ToolHandler = {
     if (!stat.isFile()) return { success: false, output: '', error: `Not a file: ${resolved}` };
     if (stat.size > 512 * 1024)
       return { success: false, output: '', error: `File too large: ${stat.size} bytes` };
+
+    // JSONファイルが大きい場合は警告（profile_tool.py等のCLI経由を推奨）
+    if (resolved.endsWith('.json') && stat.size > 5 * 1024)
+      return {
+        success: false,
+        output: '',
+        error: `JSON file too large (${stat.size} bytes). Use a CLI tool to query specific entries instead of reading the entire file.`,
+      };
 
     try {
       return { success: true, output: readFileSync(resolved, 'utf-8') };

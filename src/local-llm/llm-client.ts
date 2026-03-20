@@ -49,13 +49,18 @@ function toOpenAIMessages(messages: LLMMessage[]): OpenAIMessage[] {
 }
 
 export class LLMClient {
+  private readonly timeoutMs: number;
+
   constructor(
     private readonly baseUrl: string,
     private readonly model: string,
     private readonly apiKey: string = '',
     private readonly thinking: boolean = true,
-    private readonly defaultMaxTokens: number = 8192
-  ) {}
+    private readonly defaultMaxTokens: number = 8192,
+    private readonly numCtx?: number
+  ) {
+    this.timeoutMs = parseInt(process.env.TIMEOUT_MS || '300000', 10);
+  }
 
   async chat(messages: LLMMessage[], options?: LLMChatOptions): Promise<LLMChatResponse> {
     if (!this.thinking && this.isOllamaUrl()) {
@@ -97,14 +102,26 @@ export class LLMClient {
 
     body.options = {
       num_predict: options?.maxTokens ?? this.defaultMaxTokens,
+      ...(this.numCtx && { num_ctx: this.numCtx }),
       ...(options?.temperature !== undefined && { temperature: options.temperature }),
     };
 
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    if (options?.signal) {
+      options.signal.addEventListener('abort', () => controller.abort());
+    }
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error(`Ollama API error ${response.status}: ${await response.text()}`);
@@ -174,11 +191,23 @@ export class LLMClient {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
 
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    // 外部からのAbortSignalも連携
+    if (options?.signal) {
+      options.signal.addEventListener('abort', () => controller.abort());
+    }
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error(`LLM API error ${response.status}: ${await response.text()}`);
@@ -251,6 +280,7 @@ export class LLMClient {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -328,6 +358,7 @@ export class LLMClient {
 
     body.options = {
       num_predict: options?.maxTokens ?? this.defaultMaxTokens,
+      ...(this.numCtx && { num_ctx: this.numCtx }),
       ...(options?.temperature !== undefined && { temperature: options.temperature }),
     };
 

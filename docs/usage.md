@@ -13,6 +13,7 @@ xangiの詳細な使い方ガイドです。
 - [コマンドプレフィックス](#コマンドプレフィックス)
 - [ランタイム設定](#ランタイム設定)
 - [AIによる自律操作](#aiによる自律操作)
+- [Local LLM（Ollama等）](#local-llmollama等)
 - [トラブルシューティング](#トラブルシューティング)
 
 ## 基本操作
@@ -276,6 +277,61 @@ pm2 restart xangi
 > **⚠️ `pm2 restart --update-env` は使わないこと！**
 > `--update-env` はシェルの全環境変数をpm2に保存します。複数のxangiインスタンスを動かしている場合、別インスタンスの `DISCORD_TOKEN` 等が混入し、同じbotトークンで二重ログインする原因になります。
 > `node --env-file=.env` は既存の環境変数を上書きしないため、pm2が先にセットした値が優先されてしまいます。
+
+## Local LLM（Ollama等）
+
+### ローカル実行
+
+```bash
+# .env を設定
+AGENT_BACKEND=local-llm
+LOCAL_LLM_MODEL=nemotron-3-nano
+# LOCAL_LLM_BASE_URL=http://localhost:11434  # デフォルト
+```
+
+Ollamaが起動していればそのまま動作します。
+
+### Docker実行
+
+Docker実行時は Ollama コンテナが同じ docker network 内で起動し、`ollama:11434` で接続します。
+
+```bash
+# .env を設定（LOCAL_LLM_BASE_URL は省略可、デフォルトで ollama:11434）
+AGENT_BACKEND=local-llm
+LOCAL_LLM_MODEL=nemotron-3-nano
+```
+
+```bash
+# 起動（ollama + xangi-max）
+docker compose up -d
+
+# xangi-maxのみ再起動（.env変更後など）
+docker compose up xangi-max -d --force-recreate
+```
+
+#### 注意事項
+
+- **ホスト環境変数に注意**: `docker compose` は `.env` よりホストのシェル環境変数を優先する。別のxangiインスタンスの `DISCORD_TOKEN` 等が設定されていると上書きされる。`unset DISCORD_TOKEN` してから起動すること
+- **xangiコンテナ単体の起動**: `docker compose up xangi-max -d` でxangi-maxだけ起動すると、ollamaが起動しない場合がある。初回は `docker compose up -d` で全サービス起動を推奨
+
+#### セキュリティ
+
+- xangiコンテナはホストネットワークに**直接アクセスできません**
+- Ollamaコンテナは同じdocker network内で隔離
+- AIエージェントがホストの他サービス（SSH、Web等）にアクセスすることを防止
+- AIエージェントへの環境変数はホワイトリスト方式で制限（`DISCORD_TOKEN` 等はアクセス不可）
+
+> **⚠️ `localhost:11434` はコンテナ自身を指すため使えません。Docker実行時はデフォルトのまま（`ollama:11434`）で動作します。**
+
+### 対応モデル例
+
+| モデル | サイズ | 特徴 |
+|--------|--------|------|
+| `nemotron-3-nano` | 24GB | 軽量・高速 |
+| `nemotron-3-super` | 86GB | 高精度・エージェント向け |
+| `qwen3.5:9b` | 9GB | Thinking対応 |
+
+その他Ollamaで利用可能なモデルに対応しています。
 
 ## トラブルシューティング
 

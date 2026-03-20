@@ -135,15 +135,17 @@ skills/
    - !schedule → handleScheduleMessage()
    - /command → スラッシュコマンド処理
    ↓
-5. AI CLIに転送（processPrompt）
+5. チャンネル情報・発言者情報を付与
    ↓
-6. レスポンス処理
+6. AI CLIに転送（processPrompt）
+   ↓
+7. レスポンス処理
    - ストリーミング表示
    - ファイル添付抽出
    - SYSTEM_COMMAND検出
    - !discord / !schedule 検出・実行
    ↓
-7. ユーザーに返信
+8. ユーザーに返信
 ```
 
 ### スケジュール実行フロー
@@ -164,13 +166,14 @@ skills/
 
 ## 設計思想
 
-### シングルユーザー設計
+### ユーザー管理
 
-xangiは**1人のユーザー**が使う前提で設計されています：
+xangiのユーザー管理はシンプルな許可リスト方式：
 
-- 認証は `ALLOWED_USER` による単純なID照合
+- `DISCORD_ALLOWED_USER` / `SLACK_ALLOWED_USER` でアクセス制御
+- カンマ区切りで複数ユーザー指定可能、`*` で全員許可
 - セッションはチャンネル単位で管理
-- マルチテナント機能は意図的に省略
+- プロンプトに発言者情報（表示名・Discord ID）が自動注入される
 
 ### AI CLIの抽象化
 
@@ -267,25 +270,54 @@ prompts/
 
 ```
 ┌─────────────────────────────────────────┐
-│ xangi container                         │
+│ xangi-max container                     │
 ├─────────────────────────────────────────┤
 │ - Node.js 22                            │
 │ - Claude Code CLI / Codex CLI / Gemini  │
 │ - GitHub CLI (gh)                       │
-│ - (xangi-max) uv + Python 3.12          │
+│ - uv + Python                           │
+└───────────────┬─────────────────────────┘
+                │
+                ├── /workspace (bind mount)
+                ├── /home/node/.claude (volume)
+                ├── /home/node/.codex (volume)
+                └── /home/node/.config/gh (volume)
+
+┌─────────────────────────────────────────┐
+│ ollama container                        │
+├─────────────────────────────────────────┤
+│ - Ollama公式イメージ                     │
+│ - GPU パススルー                         │
+│ - ~/.ollama/models をvolumeマウント      │
+│ - xangi-maxから ollama:11434 で接続     │
 └─────────────────────────────────────────┘
-         │
-         ├── /workspace (bind mount)
-         ├── /home/node/.claude (volume)
-         ├── /home/node/.codex (volume)
-         └── /home/node/.config/gh (volume)
 ```
+
+**Docker環境でのLocal LLM利用:**
+- xangi-maxとollamaは同じdocker networkに接続
+- `.env` の `LOCAL_LLM_BASE_URL` はデフォルト（`http://ollama:11434`）でOK
+- Ollamaのモデルデータはvolumeで永続化
+- ホストのOllamaを使う場合は `ollama-proxy`（socat）経由も可能
 
 ### セキュリティ
 
 - 非rootユーザー（node）で実行
 - ワークスペースのみマウント
 - 認証情報はvolumeで永続化
+- AIエージェントへの環境変数はホワイトリスト方式で制限（`src/safe-env.ts`）
+- ホストネットワークへの直接アクセスなし（ollamaコンテナ経由のみ）
+- `extra_hosts` なし → ホストの他サービスにアクセス不可
+
+### 環境変数のホワイトリスト
+
+AIエージェント（CLI spawn / Local LLM exec）に渡す環境変数は `src/safe-env.ts` で管理。
+ホワイトリストに記載された変数のみ渡され、`DISCORD_TOKEN` 等のシークレットはAIからアクセス不可。
+
+**許可される変数:** `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `LC_*`, `TERM`, `TMPDIR`, `TZ`, `NODE_ENV`, `NODE_PATH`, `WORKSPACE_PATH`, `AGENT_BACKEND`, `AGENT_MODEL`, `SKIP_PERMISSIONS`, `DATA_DIR`
+
+**渡されない変数（例）:** `DISCORD_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `LOCAL_LLM_API_KEY`, `GH_TOKEN`
+
+ホワイトリストを変更する場合は `src/safe-env.ts` の `ALLOWED_ENV_KEYS` を編集する。
 
 ## 環境変数一覧
 
@@ -294,7 +326,7 @@ prompts/
 | 変数 | 説明 | 必須 |
 |------|------|------|
 | `DISCORD_TOKEN` | Discord Bot Token | ✅ |
-| `DISCORD_ALLOWED_USER` | 許可ユーザーID（1人のみ） | ✅ |
+| `DISCORD_ALLOWED_USER` | 許可ユーザーID（カンマ区切りで複数可、`*`で全員許可） | ✅ |
 | `AUTO_REPLY_CHANNELS` | メンションなしで応答するチャンネルID（カンマ区切り） | - |
 | `DISCORD_STREAMING` | ストリーミング出力（デフォルト: `true`） | - |
 | `DISCORD_SHOW_THINKING` | 思考過程を表示（デフォルト: `true`） | - |

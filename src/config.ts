@@ -60,8 +60,18 @@ export function loadConfig(): Config {
 
   const discordAllowedUser = process.env.DISCORD_ALLOWED_USER;
   const slackAllowedUser = process.env.SLACK_ALLOWED_USER;
-  const discordAllowedUsers = discordAllowedUser ? [discordAllowedUser] : [];
-  const slackAllowedUsers = slackAllowedUser ? [slackAllowedUser] : [];
+  const discordAllowedUsers = discordAllowedUser
+    ? discordAllowedUser
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+  const slackAllowedUsers = slackAllowedUser
+    ? slackAllowedUser
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
 
   const backend = (process.env.AGENT_BACKEND || 'claude-code') as AgentBackend;
   if (

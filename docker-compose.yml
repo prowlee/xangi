@@ -1,41 +1,24 @@
 # 共通設定
 x-common: &common
   restart: unless-stopped
+  env_file:
+    - .env
   volumes:
     # Claude Code CLI 認証情報（コンテナ専用ボリューム）
     - claude-data:/home/node/.claude
     # Codex CLI 認証情報（コンテナ専用ボリューム）
     - codex-data:/home/node/.codex
     # ワークスペース（エージェントの作業ディレクトリ）
-    - ${WORKSPACE_PATH:-./workspace}:/workspace
+    - ${XANGI_WORKSPACE:-./workspace}:/workspace
     # Git設定
     - ~/.gitconfig:/home/node/.gitconfig:ro
   environment: &common-env
-    # GitHub CLI (GH_TOKEN環境変数で認証)
-    - GH_TOKEN=${GH_TOKEN:-}
+    # env_fileから読み込まれない固定値のみここに記述
     - NODE_ENV=production
-    # Discord
-    - DISCORD_TOKEN=${DISCORD_TOKEN:-}
-    - AUTO_REPLY_CHANNELS=${AUTO_REPLY_CHANNELS:-}
-    - DISCORD_STREAMING=${DISCORD_STREAMING:-true}
-    - DISCORD_SHOW_THINKING=${DISCORD_SHOW_THINKING:-true}
-    # Slack
-    - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
-    - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
-    - SLACK_AUTO_REPLY_CHANNELS=${SLACK_AUTO_REPLY_CHANNELS:-}
-    - SLACK_REPLY_IN_THREAD=${SLACK_REPLY_IN_THREAD:-true}
-    - SLACK_STREAMING=${SLACK_STREAMING:-true}
-    - SLACK_SHOW_THINKING=${SLACK_SHOW_THINKING:-true}
-    # Common
-    - DISCORD_ALLOWED_USER=${DISCORD_ALLOWED_USER:-}
-    - SLACK_ALLOWED_USER=${SLACK_ALLOWED_USER:-}
     - WORKSPACE_PATH=/workspace
-    - SKIP_PERMISSIONS=${SKIP_PERMISSIONS:-false}
-    # Agent
-    - AGENT_BACKEND=${AGENT_BACKEND:-claude-code}
-    - AGENT_MODEL=${AGENT_MODEL:-}
-    # Scheduler data directory (for schedules.json)
     - DATA_DIR=/workspace/.xangi
+    # ollamaコンテナへの接続（.envで未設定時のデフォルト）
+    - LOCAL_LLM_BASE_URL=${LOCAL_LLM_BASE_URL:-http://ollama:11434}
 
 services:
   # ミニマム版（デフォルト）
@@ -51,8 +34,21 @@ services:
       context: .
       dockerfile: Dockerfile.max
     container_name: xangi-max
-    ports:
-      - "8080:8080"
+
+  # Ollama（GPU付きコンテナ）
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ${OLLAMA_MODELS_PATH:-/usr/share/ollama/.ollama}:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 volumes:
   claude-data:

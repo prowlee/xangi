@@ -3,6 +3,7 @@ import { processManager } from './process-manager.js';
 import type { RunOptions, RunResult, StreamCallbacks } from './agent-runner.js';
 import { mergeTexts, sanitizeSurrogates } from './agent-runner.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
+import { getSafeEnv } from './base-runner.js';
 import { buildSystemPrompt } from './base-runner.js';
 import { logPrompt, logResponse } from './transcript-logger.js';
 
@@ -96,6 +97,7 @@ export class ClaudeCodeRunner {
       const proc = spawn('claude', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: this.workdir,
+        env: getSafeEnv(),
       });
 
       // プロセスマネージャーに登録
@@ -200,6 +202,7 @@ export class ClaudeCodeRunner {
       const proc = spawn('claude', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: this.workdir,
+        env: getSafeEnv(),
       });
 
       // プロセスマネージャーに登録

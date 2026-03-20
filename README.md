@@ -8,8 +8,9 @@ Claude Code / Codex / Gemini CLI / Local LLM（Ollama等）をバックエンド
 
 - 🤖 マルチバックエンド対応（Claude Code / Codex / Gemini CLI / Local LLM）
 - 💬 Discord 対応
-- 👤 シングルユーザー設計
+- 👤 マルチユーザー対応（複数ユーザー許可 / 全員許可）
 - 🐳 Docker対応（コンテナ隔離環境）
+- 🔒 環境変数ホワイトリスト（AIにシークレットを渡さない）
 - 📚 スキルシステム（スラッシュコマンド対応）
 - 🐙 GitHub CLI（gh）対応
 - ⏰ スケジューラー機能（cron / 単発 / 起動時タスク）
@@ -33,7 +34,7 @@ cp .env.example .env
 # Discord Bot Token（必須）
 DISCORD_TOKEN=your_discord_bot_token
 
-# 許可ユーザーID（必須）
+# 許可ユーザーID（必須、カンマ区切りで複数可、"*"で全員許可）
 DISCORD_ALLOWED_USER=123456789012345678
 ```
 
@@ -95,6 +96,8 @@ pm2 logs xangi     # ログ確認
 
 コンテナ隔離環境で実行したい場合は Docker も利用できます。
 
+### Claude Code バックエンド
+
 ```bash
 docker compose up xangi -d --build
 ```
@@ -104,6 +107,37 @@ Claude Code 認証:
 docker exec -it xangi claude
 ```
 
+### Local LLM バックエンド（Ollama）
+
+Ollamaコンテナが同梱されているため、ホストにOllamaをインストールする必要はありません。
+
+```bash
+# .env を設定
+AGENT_BACKEND=local-llm
+LOCAL_LLM_MODEL=nemotron-3-nano
+
+# 起動（ollama + xangi-max）
+docker compose up -d --build
+```
+
+> **⚠️ 注意**: ホストのシェルに `DISCORD_TOKEN` 等の環境変数が設定されていると `.env` を上書きします。`env -i` で環境変数をクリアして起動するか、`unset DISCORD_TOKEN` 等で対処してください。
+
+### Docker操作
+
+```bash
+# 停止
+docker compose down
+
+# 再起動（.env変更後など）
+docker compose up xangi-max -d --force-recreate
+
+# xangi-maxのみ再起動（ollamaはそのまま）
+docker compose up xangi-max -d
+
+# ログ確認
+docker logs -f xangi-max
+```
+
 ## 環境変数
 
 ### 必須
@@ -111,7 +145,7 @@ docker exec -it xangi claude
 | 変数 | 説明 |
 |------|------|
 | `DISCORD_TOKEN` | Discord Bot Token |
-| `DISCORD_ALLOWED_USER` | 許可ユーザーID |
+| `DISCORD_ALLOWED_USER` | 許可ユーザーID（カンマ区切りで複数可、`*`で全員許可） |
 
 ### オプション
 

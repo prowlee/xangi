@@ -26,6 +26,7 @@ export interface LLMChatOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  signal?: AbortSignal;
 }
 
 export interface LLMChatResponse {

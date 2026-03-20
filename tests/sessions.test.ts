@@ -5,10 +5,12 @@ import { join } from 'path';
 import {
   initSessions,
   getSession,
+  getSessionEntry,
   setSession,
   deleteSession,
   clearSessions,
   getSessionCount,
+  getBootId,
 } from '../src/sessions.js';
 
 describe('sessions', () => {
@@ -43,6 +45,74 @@ describe('sessions', () => {
       expect(getSession('channel-1')).toBe('session-abc');
       expect(getSession('channel-2')).toBe('session-def');
     });
+
+    it('should migrate legacy string format to SessionEntry', () => {
+      const sessionsPath = join(testDir, 'sessions.json');
+      const data = { 'channel-1': 'session-abc' };
+      require('fs').writeFileSync(sessionsPath, JSON.stringify(data));
+
+      initSessions(testDir);
+      const entry = getSessionEntry('channel-1');
+      expect(entry).toBeDefined();
+      expect(entry!.sessionId).toBe('session-abc');
+      expect(entry!.scope).toBe('interactive');
+      expect(entry!.bootId).toBe(''); // 旧データは bootId 不明
+    });
+
+    it('should load new format sessions', () => {
+      const sessionsPath = join(testDir, 'sessions.json');
+      const data = {
+        'channel-1': {
+          sessionId: 'session-abc',
+          scope: 'interactive',
+          bootId: 'boot-xyz',
+          updatedAt: '2026-03-18T00:00:00Z',
+        },
+      };
+      require('fs').writeFileSync(sessionsPath, JSON.stringify(data));
+
+      initSessions(testDir);
+      const entry = getSessionEntry('channel-1');
+      expect(entry).toBeDefined();
+      expect(entry!.sessionId).toBe('session-abc');
+      expect(entry!.scope).toBe('interactive');
+      expect(entry!.bootId).toBe('boot-xyz');
+    });
+
+    it('should purge scheduler sessions on init', () => {
+      const sessionsPath = join(testDir, 'sessions.json');
+      const data = {
+        'channel-1': {
+          sessionId: 'session-abc',
+          scope: 'interactive',
+          bootId: 'boot-old',
+          updatedAt: '2026-03-18T00:00:00Z',
+        },
+        'channel-2': {
+          sessionId: 'session-def',
+          scope: 'scheduler',
+          bootId: 'boot-old',
+          updatedAt: '2026-03-18T00:00:00Z',
+        },
+      };
+      require('fs').writeFileSync(sessionsPath, JSON.stringify(data));
+
+      initSessions(testDir);
+      // interactive は残る
+      expect(getSession('channel-1')).toBe('session-abc');
+      // scheduler はクリアされる
+      expect(getSession('channel-2')).toBeUndefined();
+      expect(getSessionCount()).toBe(1);
+    });
+
+    it('should generate a new bootId on each init', () => {
+      initSessions(testDir);
+      const bootId1 = getBootId();
+      clearSessions();
+      initSessions(testDir);
+      const bootId2 = getBootId();
+      expect(bootId1).not.toBe(bootId2);
+    });
   });
 
   describe('getSession', () => {
@@ -68,7 +138,9 @@ describe('sessions', () => {
       expect(existsSync(sessionsPath)).toBe(true);
 
       const saved = JSON.parse(readFileSync(sessionsPath, 'utf-8'));
-      expect(saved['channel-1']).toBe('session-123');
+      expect(saved['channel-1'].sessionId).toBe('session-123');
+      expect(saved['channel-1'].scope).toBe('interactive');
+      expect(saved['channel-1'].bootId).toBe(getBootId());
     });
 
     it('should update existing session', () => {
@@ -77,6 +149,14 @@ describe('sessions', () => {
       setSession('channel-1', 'session-new');
 
       expect(getSession('channel-1')).toBe('session-new');
+    });
+
+    it('should save with scheduler scope', () => {
+      initSessions(testDir);
+      setSession('channel-1', 'session-123', 'scheduler');
+
+      const entry = getSessionEntry('channel-1');
+      expect(entry!.scope).toBe('scheduler');
     });
   });
 
@@ -115,6 +195,19 @@ describe('sessions', () => {
 
       expect(getSession('channel-1')).toBe('session-abc');
       expect(getSession('channel-2')).toBe('session-def');
+    });
+
+    it('should purge scheduler sessions but keep interactive on restart', () => {
+      initSessions(testDir);
+      setSession('channel-1', 'session-abc', 'interactive');
+      setSession('channel-2', 'session-def', 'scheduler');
+
+      // シミュレート: プロセス再起動
+      clearSessions();
+      initSessions(testDir);
+
+      expect(getSession('channel-1')).toBe('session-abc');
+      expect(getSession('channel-2')).toBeUndefined();
     });
   });
 });

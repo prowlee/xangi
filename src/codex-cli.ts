@@ -2,7 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { processManager } from './process-manager.js';
 import type { AgentRunner, RunOptions, RunResult, StreamCallbacks } from './agent-runner.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
-import { buildSystemPrompt } from './base-runner.js';
+import { buildSystemPrompt, getSafeEnv } from './base-runner.js';
 import { logPrompt, logResponse } from './transcript-logger.js';
 
 export interface CodexOptions {
@@ -157,6 +157,7 @@ export class CodexRunner implements AgentRunner {
       const proc = spawn('codex', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: this.workdir,
+        env: getSafeEnv(),
       });
       this.currentProcess = proc;
 
@@ -270,6 +271,7 @@ export class CodexRunner implements AgentRunner {
       const proc = spawn('codex', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: this.workdir,
+        env: getSafeEnv(),
       });
       this.currentProcess = proc;
 
