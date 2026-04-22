@@ -4,7 +4,7 @@ import type { AgentBackend, Config, EffortLevel } from './config.js';
 import { getBackendDisplayName } from './agent-runner.js';
 
 /**
- * チャンネルごとのオーバーライド設定
+ * 每个频道的覆盖设置
  */
 export interface ChannelOverride {
   backend?: AgentBackend;
@@ -13,7 +13,7 @@ export interface ChannelOverride {
 }
 
 /**
- * チャンネルごとに解決されたバックエンド設定
+ * 每个频道解析后的后端设置
  */
 export interface ResolvedBackend {
   backend: AgentBackend;
@@ -22,17 +22,17 @@ export interface ResolvedBackend {
 }
 
 /**
- * チャンネルごとのバックエンド・モデル・effortを解決する
+ * 解析每个频道的后端、模型、effort
  *
- * 優先順位:
- * 1. /model set で設定されたメモリ上のオーバーライド
- * 2. CHANNEL_OVERRIDES 環境変数（.env で永続化）
- * 3. .env のデフォルト（AGENT_BACKEND, AGENT_MODEL）
+ * 优先级:
+ * 1. 通过 /model set 设置的内存覆盖
+ * 2. CHANNEL_OVERRIDES 环境变量（通过 .env 持久化）
+ * 3. .env 的默认值（AGENT_BACKEND, AGENT_MODEL）
  *
- * channelOverrides はメモリ上で管理。
- * 初期値は CHANNEL_OVERRIDES 環境変数から読み込む。
- * Docker環境では .env に書けばコンテナ内にファイルが存在しないため、
- * AIから変更される心配がない。
+ * channelOverrides 在内存中管理。
+ * 初始值从 CHANNEL_OVERRIDES 环境变量读取。
+ * 在 Docker 环境中，由于 .env 文件在容器内不存在，
+ * 无需担心被 AI 修改。
  */
 export class BackendResolver {
   private defaultBackend: AgentBackend;
@@ -40,9 +40,9 @@ export class BackendResolver {
   private allowedBackends?: AgentBackend[];
   private allowedModels?: string[];
 
-  /** メモリ上のチャンネルオーバーライド */
+  /** 内存中的频道覆盖 */
   private channelOverrides: Map<string, ChannelOverride>;
-  /** .envファイルのパス（永続化用） */
+  /** .env 文件路径（用于持久化） */
   private envFilePath?: string;
 
   constructor(config: Config) {
@@ -51,7 +51,7 @@ export class BackendResolver {
     this.allowedBackends = config.agent.allowedBackends;
     this.allowedModels = config.agent.allowedModels;
 
-    // CHANNEL_OVERRIDES 環境変数から初期値を読み込み
+    // 从 CHANNEL_OVERRIDES 环境变量读取初始值
     this.channelOverrides = new Map();
     const envOverrides = process.env.CHANNEL_OVERRIDES;
     if (envOverrides) {
@@ -68,19 +68,19 @@ export class BackendResolver {
       }
     }
 
-    // .envファイルのパスを検出（永続化用）
-    // xangiの起動ディレクトリに.envがあればそれを使う
+    // 检测 .env 文件路径（用于持久化）
+    // 如果 xangi 的启动目录中有 .env 则使用它
     try {
       const candidatePath = join(process.cwd(), '.env');
       readFileSync(candidatePath, 'utf-8');
       this.envFilePath = candidatePath;
     } catch {
-      // .envが見つからない場合は永続化しない（Docker環境等）
+      // 未找到 .env 则不持久化（Docker 环境等）
     }
   }
 
   /**
-   * 指定チャンネルのバックエンド設定を解決
+   * 解析指定频道的后端设置
    */
   resolve(channelId?: string): ResolvedBackend {
     if (!channelId) {
@@ -106,7 +106,7 @@ export class BackendResolver {
   }
 
   /**
-   * チャンネルオーバーライドを設定し、.envに永続化
+   * 设置频道覆盖，并持久化到 .env
    */
   setChannelOverride(channelId: string, override: ChannelOverride): void {
     this.channelOverrides.set(channelId, override);
@@ -119,7 +119,7 @@ export class BackendResolver {
   }
 
   /**
-   * チャンネルオーバーライドを削除し、.envに永続化
+   * 删除频道覆盖，并持久化到 .env
    */
   deleteChannelOverride(channelId: string): boolean {
     const had = this.channelOverrides.delete(channelId);
@@ -131,7 +131,7 @@ export class BackendResolver {
   }
 
   /**
-   * 現在のchannelOverridesを.envのCHANNEL_OVERRIDESに永続化
+   * 将当前的 channelOverrides 持久化到 .env 的 CHANNEL_OVERRIDES
    */
   private persistToEnv(): void {
     if (!this.envFilePath) return;
@@ -147,14 +147,14 @@ export class BackendResolver {
       const line = newValue ? `CHANNEL_OVERRIDES=${newValue}` : '';
 
       if (envContent.includes('CHANNEL_OVERRIDES=')) {
-        // 既存行を置換
+        // 替换现有行
         envContent = envContent.replace(/^CHANNEL_OVERRIDES=.*$/m, line);
-        // 空行になった場合は削除
+        // 如果变成空行则删除
         if (!line) {
           envContent = envContent.replace(/\n\n+/g, '\n\n');
         }
       } else if (line) {
-        // 新規追加
+        // 新增
         envContent = envContent.trimEnd() + '\n\n' + line + '\n';
       }
 
@@ -166,15 +166,15 @@ export class BackendResolver {
   }
 
   /**
-   * チャンネルオーバーライドを取得
+   * 获取频道覆盖
    */
   getChannelOverride(channelId: string): ChannelOverride | undefined {
     return this.channelOverrides.get(channelId);
   }
 
   /**
-   * バックエンドが許可リストに含まれるか
-   * ALLOWED_BACKENDS 未設定時は false（切り替え不可）
+   * 后端是否在允许列表中
+   * 未设置 ALLOWED_BACKENDS 时返回 false（不可切换）
    */
   isBackendAllowed(backend: AgentBackend): boolean {
     if (!this.allowedBackends) return false;
@@ -182,8 +182,8 @@ export class BackendResolver {
   }
 
   /**
-   * モデルが許可リストに含まれるか
-   * ALLOWED_MODELS 未設定時は true（制限なし）
+   * 模型是否在允许列表中
+   * 未设置 ALLOWED_MODELS 时返回 true（无限制）
    */
   isModelAllowed(model: string): boolean {
     if (!this.allowedModels) return true;
@@ -191,7 +191,7 @@ export class BackendResolver {
   }
 
   /**
-   * デフォルトバックエンドを取得
+   * 获取默认后端
    */
   getDefault(): ResolvedBackend {
     return {
@@ -201,22 +201,22 @@ export class BackendResolver {
   }
 
   /**
-   * 許可されているバックエンド一覧
-   * 未設定時はデフォルトバックエンドのみ
+   * 允许的后端列表
+   * 未设置时仅包含默认后端
    */
   getAllowedBackends(): AgentBackend[] {
     return this.allowedBackends ?? [this.defaultBackend];
   }
 
   /**
-   * 許可されているモデル一覧（undefined = 制限なし）
+   * 允许的模型列表（undefined = 无限制）
    */
   getAllowedModels(): string[] | undefined {
     return this.allowedModels;
   }
 
   /**
-   * 現在のチャンネルオーバーライド一覧を取得（表示用）
+   * 获取当前频道覆盖列表（用于显示）
    */
   getChannelOverrides(): Map<string, ChannelOverride> {
     return new Map(this.channelOverrides);
