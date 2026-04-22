@@ -8,11 +8,11 @@ export interface AgentConfig {
   timeoutMs?: number;
   workdir?: string;
   skipPermissions?: boolean;
-  /** 常駐プロセスモード（高速化） */
+  /** 常驻进程模式（高速化） */
   persistent?: boolean;
-  /** 同時実行プロセス数の上限（RunnerManager用） */
+  /** 同时执行进程数的上限（用于 RunnerManager） */
   maxProcesses?: number;
-  /** アイドルタイムアウト（ミリ秒、RunnerManager用） */
+  /** 空闲超时时间（毫秒，用于 RunnerManager） */
   idleTimeoutMs?: number;
 }
 
@@ -44,16 +44,16 @@ export interface Config {
     backend: AgentBackend;
     config: AgentConfig;
     platform?: ChatPlatform;
-    /** 切り替え許可バックエンド一覧（未設定=全て許可） */
+    /** 允许切换的后端列表（未设置=全部允许） */
     allowedBackends?: AgentBackend[];
-    /** 切り替え許可モデル一覧（未設定=全て許可） */
+    /** 允许切换的模型列表（未设置=全部允许） */
     allowedModels?: string[];
   };
   scheduler: {
     enabled: boolean;
     startupEnabled: boolean;
   };
-  // 後方互換性のため残す
+  // 为保持向后兼容性而保留
   claudeCode: AgentConfig;
 }
 
@@ -62,7 +62,7 @@ export function loadConfig(): Config {
   const slackBotToken = process.env.SLACK_BOT_TOKEN;
   const slackAppToken = process.env.SLACK_APP_TOKEN;
 
-  // 少なくともどちらかが有効である必要がある（WebChatのみでもOK）
+  // 至少需要启用其中一个（仅 WebChat 也可以）
   const webChatEnabled = process.env.WEB_CHAT_ENABLED === 'true';
   if (!discordToken && !slackBotToken && !webChatEnabled) {
     throw new Error(
@@ -97,7 +97,7 @@ export function loadConfig(): Config {
     );
   }
 
-  // プラットフォーム自動検出
+  // 自动检测平台
   const discordEnabled = !!discordToken;
   const slackEnabled = !!slackBotToken && !!slackAppToken;
   let platform: ChatPlatform | undefined;
@@ -106,21 +106,21 @@ export function loadConfig(): Config {
   } else if (slackEnabled && !discordEnabled) {
     platform = 'slack';
   }
-  // 両方有効 → undefined（全コマンド注入）
+  // 两者都启用 → undefined（注入所有命令）
 
   const agentConfig: AgentConfig = {
     model: process.env.AGENT_MODEL || undefined,
     timeoutMs: process.env.TIMEOUT_MS ? parseInt(process.env.TIMEOUT_MS, 10) : DEFAULT_TIMEOUT_MS,
     workdir: process.env.WORKSPACE_PATH || undefined,
     skipPermissions: process.env.SKIP_PERMISSIONS === 'true',
-    persistent: process.env.PERSISTENT_MODE !== 'false', // デフォルトで有効
+    persistent: process.env.PERSISTENT_MODE !== 'false', // 默认启用
     maxProcesses: process.env.MAX_PROCESSES ? parseInt(process.env.MAX_PROCESSES, 10) : 10,
     idleTimeoutMs: process.env.IDLE_TIMEOUT_MS
       ? parseInt(process.env.IDLE_TIMEOUT_MS, 10)
-      : 30 * 60 * 1000, // 30分
+      : 30 * 60 * 1000, // 30分钟
   };
 
-  // ALLOWED_BACKENDS / ALLOWED_MODELS パース
+  // 解析 ALLOWED_BACKENDS / ALLOWED_MODELS
   const allowedBackendsRaw = process.env.ALLOWED_BACKENDS;
   const allowedBackends: AgentBackend[] | undefined = allowedBackendsRaw
     ? (allowedBackendsRaw
@@ -148,9 +148,9 @@ export function loadConfig(): Config {
           .filter(Boolean) || [],
       streaming: process.env.DISCORD_STREAMING !== 'false',
       showThinking: process.env.DISCORD_SHOW_THINKING !== 'false',
-      injectChannelTopic: process.env.INJECT_CHANNEL_TOPIC !== 'false', // デフォルトON
-      injectTimestamp: process.env.INJECT_TIMESTAMP !== 'false', // デフォルトON
-      showButtons: process.env.DISCORD_SHOW_BUTTONS !== 'false', // デフォルトON
+      injectChannelTopic: process.env.INJECT_CHANNEL_TOPIC !== 'false', // 默认开启
+      injectTimestamp: process.env.INJECT_TIMESTAMP !== 'false', // 默认开启
+      showButtons: process.env.DISCORD_SHOW_BUTTONS !== 'false', // 默认开启
     },
     slack: {
       enabled: !!slackBotToken && !!slackAppToken,
@@ -173,10 +173,10 @@ export function loadConfig(): Config {
       allowedModels,
     },
     scheduler: {
-      enabled: process.env.SCHEDULER_ENABLED !== 'false', // デフォルトで有効
-      startupEnabled: process.env.STARTUP_ENABLED !== 'false', // デフォルトで有効
+      enabled: process.env.SCHEDULER_ENABLED !== 'false', // 默认启用
+      startupEnabled: process.env.STARTUP_ENABLED !== 'false', // 默认启用
     },
-    // 後方互換性のため残す
+    // 为保持向后兼容性而保留
     claudeCode: agentConfig,
   };
 }
