@@ -1,14 +1,14 @@
 /**
- * 危険コマンド検知 + Discord/Slack承認フロー
+ * 危险命令检测 + Discord/Slack 批准流程
  *
- * パターンは approval-patterns.json から読み込み。
- * APPROVAL_ENABLED=true で有効化（デフォルト無効）。
+ * 模式从 approval-patterns.json 读取。
+ * 设置 APPROVAL_ENABLED=true 启用（默认禁用）。
  */
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-/** 危険コマンドのパターン定義 */
+/** 危险命令的模式定义 */
 export interface DangerPattern {
   command: string;
   description: string;
@@ -16,7 +16,7 @@ export interface DangerPattern {
 }
 
 /**
- * approval-patterns.json からパターンを読み込み
+ * 从 approval-patterns.json 读取模式
  */
 function loadPatternsFromFile(): DangerPattern[] {
   const paths = [
@@ -28,24 +28,24 @@ function loadPatternsFromFile(): DangerPattern[] {
       const raw = readFileSync(filePath, 'utf-8');
       return JSON.parse(raw) as DangerPattern[];
     } catch {
-      // next path
+      // 继续尝试下一个路径
     }
   }
   console.warn('[approval] Failed to load approval-patterns.json, using empty patterns');
   return [];
 }
 
-/** 機密ファイルパターン（Write/Edit検知用） */
+/** 敏感文件模式（用于 Write/Edit 检测） */
 const SENSITIVE_FILE_PATTERNS = /\.env$|credentials|\.pem$|\.key$/;
 
-/** 有効なパターンリスト */
+/** 有效的模式列表 */
 let activePatterns: DangerPattern[] = loadPatternsFromFile();
 
-/** 承認機能の有効/無効（デフォルト無効） */
+/** 批准功能的启用/禁用（默认禁用） */
 let approvalEnabled = false;
 
 /**
- * 承認機能を有効/無効化
+ * 设置批准功能启用/禁用
  */
 export function setApprovalEnabled(enabled: boolean): void {
   approvalEnabled = enabled;
@@ -56,14 +56,14 @@ export function setApprovalEnabled(enabled: boolean): void {
 }
 
 /**
- * 承認機能が有効かどうか
+ * 批准功能是否启用
  */
 export function isApprovalEnabled(): boolean {
   return approvalEnabled;
 }
 
 /**
- * パターンを再読み込み
+ * 重新加载模式
  */
 export function reloadPatterns(): void {
   activePatterns = loadPatternsFromFile();
@@ -71,7 +71,7 @@ export function reloadPatterns(): void {
 }
 
 /**
- * 現在のパターンリストを取得
+ * 获取当前模式列表
  */
 export function getDangerPatterns(): DangerPattern[] {
   return [...activePatterns];
@@ -83,7 +83,7 @@ export interface DangerousCommand {
 }
 
 /**
- * コマンドが危険かどうか判定
+ * 判断命令是否危险
  */
 export function detectDangerousCommand(input: string): DangerousCommand | null {
   if (!approvalEnabled) return null;
@@ -98,7 +98,7 @@ export function detectDangerousCommand(input: string): DangerousCommand | null {
 }
 
 /**
- * ツール呼び出しが危険かどうか判定
+ * 判断工具调用是否危险
  */
 export function detectDangerousTool(
   toolName: string,
@@ -111,13 +111,13 @@ export function detectDangerousTool(
   if ((toolName === 'Write' || toolName === 'Edit') && toolInput.file_path) {
     const filePath = String(toolInput.file_path);
     if (SENSITIVE_FILE_PATTERNS.test(filePath)) {
-      return { command: `${toolName}: ${filePath}`, matches: ['機密ファイルの変更'] };
+      return { command: `${toolName}: ${filePath}`, matches: ['敏感文件修改'] };
     }
   }
   return null;
 }
 
-// --- 承認キュー ---
+// --- 批准队列 ---
 
 interface PendingApproval {
   id: string;
@@ -129,12 +129,12 @@ interface PendingApproval {
 
 const pendingApprovals = new Map<string, PendingApproval>();
 
-const APPROVAL_TIMEOUT_MS = 120_000; // 2分
+const APPROVAL_TIMEOUT_MS = 120_000; // 2分钟
 
 let approvalCounter = 0;
 
 /**
- * 承認リクエストを作成し、ユーザーの応答を待つ
+ * 创建批准请求，等待用户响应
  */
 export function requestApproval(
   channelId: string,
@@ -156,7 +156,7 @@ export function requestApproval(
 }
 
 /**
- * 承認/拒否の応答を処理
+ * 处理批准/拒绝的响应
  */
 export function resolveApproval(approvalId: string, approved: boolean): boolean {
   const pending = pendingApprovals.get(approvalId);
