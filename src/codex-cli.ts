@@ -14,7 +14,7 @@ export interface CodexOptions {
 }
 
 /**
- * Codex CLI 0.98.0 の JSONL イベント型定義
+ * Codex CLI 0.98.0 的 JSONL 事件类型定义
  */
 interface CodexEvent {
   type: string;
@@ -30,13 +30,13 @@ interface CodexEvent {
     cached_input_tokens?: number;
     output_tokens?: number;
   };
-  // フォールバック用
+  // 回退用
   content?: string;
   result?: string;
 }
 
 /**
- * Codex CLI を実行するランナー（0.98.0 対応）
+ * 执行 Codex CLI 的运行器（0.98.0 兼容）
  */
 export class CodexRunner implements AgentRunner {
   private model?: string;
@@ -55,7 +55,7 @@ export class CodexRunner implements AgentRunner {
   }
 
   /**
-   * コマンド引数を構築（run/runStream 共通）
+   * 构建命令参数（run/runStream 共用）
    */
   private buildArgs(prompt: string, options?: RunOptions): string[] {
     const args: string[] = ['exec', '--json'];
@@ -67,7 +67,7 @@ export class CodexRunner implements AgentRunner {
       args.push('--full-auto');
     }
 
-    // gitリポジトリ外でも動作するように
+    // 允许在 git 仓库外运行
     args.push('--skip-git-repo-check');
 
     if (this.model) {
@@ -78,12 +78,12 @@ export class CodexRunner implements AgentRunner {
       args.push('--cd', this.workdir);
     }
 
-    // セッション継続（--cd, --model等のオプションはresumeサブコマンドの前に置く必要がある）
+    // 继续会话（--cd、--model 等选项需要放在 resume 子命令之前）
     if (options?.sessionId) {
       args.push('resume', options.sessionId);
     }
 
-    // システムプロンプトをプロンプトに注入
+    // 将系统提示词注入到提示词中
     const fullPrompt = this.systemPrompt
       ? `<system-context>\n${this.systemPrompt}\n</system-context>\n\n${prompt}`
       : prompt;
@@ -94,32 +94,32 @@ export class CodexRunner implements AgentRunner {
   }
 
   /**
-   * JSONL 行からセッション ID を抽出
+   * 从 JSONL 行中提取会话 ID
    */
   private extractSessionId(json: CodexEvent): string | undefined {
-    // Codex 0.98.0 は thread.started イベントで thread_id を返す
+    // Codex 0.98.0 在 thread.started 事件中返回 thread_id
     if (json.type === 'thread.started' && json.thread_id) {
       return json.thread_id;
     }
-    // フォールバック
+    // 回退
     if (json.thread_id) return json.thread_id;
     if (json.session_id) return json.session_id;
     return undefined;
   }
 
   /**
-   * JSONL 行からテキストを抽出
+   * 从 JSONL 行中提取文本
    */
   private extractText(json: CodexEvent): { text: string; isComplete: boolean } | null {
-    // agent_message の完了 — 最終的な回答テキスト
+    // agent_message 完成 — 最终的回答文本
     if (json.type === 'item.completed' && json.item?.type === 'agent_message' && json.item.text) {
       return { text: json.item.text, isComplete: true };
     }
-    // フォールバック: message イベント
+    // 回退: message 事件
     if (json.type === 'message' && json.content) {
       return { text: json.content, isComplete: true };
     }
-    // フォールバック: result フィールド
+    // 回退: result 字段
     if (json.result) {
       return { text: json.result, isComplete: true };
     }
@@ -134,7 +134,7 @@ export class CodexRunner implements AgentRunner {
       : ' (new)';
     console.log(`[codex] Executing in ${this.workdir || 'default dir'}${sessionInfo}`);
 
-    // トランスクリプトログ: 送信プロンプトを記録
+    // 记录日志: 记录发送的提示词
     if (options?.appSessionId && this.workdir) {
       logPrompt(this.workdir, options.appSessionId, prompt);
     }
@@ -142,7 +142,7 @@ export class CodexRunner implements AgentRunner {
     const { stdout, sessionId } = await this.execute(args, options?.channelId);
     const result = this.extractResult(stdout);
 
-    // トランスクリプトログ: 応答を記録
+    // 记录日志: 记录响应
     if (options?.appSessionId && this.workdir) {
       logResponse(this.workdir, options.appSessionId, { result, sessionId });
     }
@@ -187,7 +187,7 @@ export class CodexRunner implements AgentRunner {
             const sid = this.extractSessionId(json);
             if (sid) sessionId = sid;
           } catch {
-            // JSONパースエラーは無視
+            // 忽略 JSON 解析错误
           }
         }
       });
@@ -237,16 +237,16 @@ export class CodexRunner implements AgentRunner {
           }
         }
       } catch {
-        // JSONパースエラーは無視
+        // 忽略 JSON 解析错误
       }
     }
 
-    // 最後の agent_message を使用（複数ターンの場合）
+    // 使用最后一个 agent_message（多轮对话的情况）
     return messageParts.length > 0 ? messageParts[messageParts.length - 1] : output;
   }
 
   /**
-   * ストリーミング実行
+   * 流式执行
    */
   async runStream(
     prompt: string,
@@ -260,7 +260,7 @@ export class CodexRunner implements AgentRunner {
       : ' (new)';
     console.log(`[codex] Streaming in ${this.workdir || 'default dir'}${sessionInfo}`);
 
-    // トランスクリプトログ: 送信プロンプトを記録
+    // 记录日志: 记录发送的提示词
     if (options?.appSessionId && this.workdir) {
       logPrompt(this.workdir, options.appSessionId, prompt);
     }
@@ -305,25 +305,25 @@ export class CodexRunner implements AgentRunner {
           try {
             const json = JSON.parse(line) as CodexEvent;
 
-            // セッションID抽出
+            // 提取会话 ID
             const sid = this.extractSessionId(json);
             if (sid) sessionId = sid;
 
-            // テキスト抽出
+            // 提取文本
             const extracted = this.extractText(json);
             if (extracted) {
               fullText = extracted.text;
               callbacks.onText?.(extracted.text, fullText);
             }
 
-            // トークン使用量ログ
+            // 记录 token 使用量
             if (json.type === 'turn.completed' && json.usage) {
               console.log(
                 `[codex] Usage: input=${json.usage.input_tokens} (cached=${json.usage.cached_input_tokens ?? 0}), output=${json.usage.output_tokens}`
               );
             }
           } catch {
-            // JSONパースエラーは無視
+            // 忽略 JSON 解析错误
           }
         }
       });
@@ -344,7 +344,7 @@ export class CodexRunner implements AgentRunner {
         clearTimeout(timeout);
         this.currentProcess = null;
 
-        // 残りのバッファを処理
+        // 处理剩余的缓冲区
         if (buffer.trim()) {
           try {
             const json = JSON.parse(buffer) as CodexEvent;
@@ -355,7 +355,7 @@ export class CodexRunner implements AgentRunner {
               fullText = extracted.text;
             }
           } catch {
-            // JSONパースエラーは無視
+            // 忽略 JSON 解析错误
           }
         }
 
@@ -368,7 +368,7 @@ export class CodexRunner implements AgentRunner {
 
         const result: RunResult = { result: fullText, sessionId };
 
-        // トランスクリプトログ: 応答を記録
+        // 记录日志: 记录响应
         if (appSessionId && this.workdir) {
           logResponse(this.workdir, appSessionId, { result: fullText, sessionId });
         }
@@ -388,7 +388,7 @@ export class CodexRunner implements AgentRunner {
   }
 
   /**
-   * 現在処理中のリクエストをキャンセル
+   * 取消当前正在处理的请求
    */
   cancel(): boolean {
     if (!this.currentProcess) {
