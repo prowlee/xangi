@@ -29,7 +29,7 @@ interface ClaudeCodeResponse {
 }
 
 /**
- * Claude Code CLI を実行するランナー
+ * 执行 Claude Code CLI 的运行器
  */
 export class ClaudeCodeRunner {
   private model?: string;
@@ -41,7 +41,7 @@ export class ClaudeCodeRunner {
 
   constructor(options?: ClaudeCodeOptions) {
     this.model = options?.model;
-    this.timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS; // デフォルト5分
+    this.timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS; // 默认5分钟
     this.workdir = options?.workdir;
     this.skipPermissions = options?.skipPermissions ?? false;
     this.systemPrompt = buildSystemPrompt(options?.platform);
@@ -57,7 +57,7 @@ export class ClaudeCodeRunner {
       args.push('--dangerously-skip-permissions');
     }
 
-    // セッション継続
+    // 继续会话
     if (options?.sessionId) {
       args.push('--resume', options.sessionId);
     }
@@ -71,7 +71,7 @@ export class ClaudeCodeRunner {
       args.push('--effort', effort);
     }
 
-    // チャットプラットフォーム連携のシステムプロンプト + AGENTS.md
+    // 聊天平台协作的系统提示词 + AGENTS.md
     args.push('--append-system-prompt', this.systemPrompt);
 
     args.push(prompt);
@@ -81,7 +81,7 @@ export class ClaudeCodeRunner {
       : ' (new)';
     console.log(`[claude-code] Executing in ${this.workdir || 'default dir'}${sessionInfo}`);
 
-    // トランスクリプトログ: 送信プロンプトを記録
+    // 记录日志: 记录发送的提示词
     if (options?.appSessionId && this.workdir) {
       logPrompt(this.workdir, options.appSessionId, prompt);
     }
@@ -89,7 +89,7 @@ export class ClaudeCodeRunner {
     const result = await this.execute(args, options?.channelId);
     const response = this.parseResponse(result);
 
-    // トランスクリプトログ: 応答を記録
+    // 记录日志: 记录响应
     if (options?.appSessionId && this.workdir) {
       logResponse(this.workdir, options.appSessionId, {
         result: response.result,
@@ -116,7 +116,7 @@ export class ClaudeCodeRunner {
         env: childEnv,
       });
 
-      // プロセスマネージャーに登録
+      // 注册到进程管理器
       if (channelId) {
         processManager.register(channelId, proc);
       }
@@ -173,7 +173,7 @@ export class ClaudeCodeRunner {
   }
 
   /**
-   * ストリーミング実行
+   * 流式执行
    */
   async runStream(
     rawPrompt: string,
@@ -201,7 +201,7 @@ export class ClaudeCodeRunner {
       args.push('--effort', effort);
     }
 
-    // チャットプラットフォーム連携のシステムプロンプト + AGENTS.md
+    // 聊天平台协作的系统提示词 + AGENTS.md
     args.push('--append-system-prompt', this.systemPrompt);
 
     args.push(prompt);
@@ -231,7 +231,7 @@ export class ClaudeCodeRunner {
         env: childEnv,
       });
 
-      // プロセスマネージャーに登録
+      // 注册到进程管理器
       if (channelId) {
         processManager.register(channelId, proc);
       }
@@ -264,14 +264,14 @@ export class ClaudeCodeRunner {
                 reject(error);
                 return;
               }
-              // ストリーミング中の累積テキストと最終 result をマージ
-              // （ツール呼び出し前のテキストが result から消えるのを防ぐ）
+              // 合并流式传输中的累积文本和最终 result
+              // （防止工具调用前的文本从 result 中消失）
               if (json.result) {
                 fullText = mergeTexts(fullText, json.result);
               }
             }
           } catch {
-            // JSONパースエラーは無視
+            // 忽略 JSON 解析错误
           }
         }
       });
@@ -290,7 +290,7 @@ export class ClaudeCodeRunner {
       proc.on('close', (code) => {
         clearTimeout(timeout);
 
-        // 残りのバッファを処理
+        // 处理剩余的缓冲区
         if (buffer.trim()) {
           try {
             const json = JSON.parse(buffer);
@@ -302,13 +302,13 @@ export class ClaudeCodeRunner {
               }
             } else if (json.type === 'result') {
               sessionId = json.session_id;
-              // ストリーミング中の累積テキストと最終 result をマージ
+              // 合并流式传输中的累积文本和最终 result
               if (json.result) {
                 fullText = mergeTexts(fullText, json.result);
               }
             }
           } catch {
-            // JSONパースエラーは無視
+            // 忽略 JSON 解析错误
           }
         }
 
