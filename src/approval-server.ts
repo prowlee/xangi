@@ -1,7 +1,7 @@
 /**
- * Claude Code PreToolUse HTTPフック用サーバー
+ * Claude Code PreToolUse HTTP 钩子服务器
  *
- * Claude Codeの settings.json で以下を設定:
+ * 在 Claude Code 的 settings.json 中设置以下内容:
  * {
  *   "hooks": {
  *     "PreToolUse": [{
@@ -28,14 +28,14 @@ let server: Server | null = null;
 let approvalCallback: ApprovalCallback | null = null;
 
 /**
- * 承認サーバーを起動
+ * 启动批准服务器
  */
 export function startApprovalServer(callback: ApprovalCallback, port?: number): void {
   const listenPort = port || parseInt(process.env.APPROVAL_SERVER_PORT || String(DEFAULT_PORT), 10);
   approvalCallback = callback;
 
   server = createServer(async (req, res) => {
-    // ヘルスチェック
+    // 健康检查
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', port: listenPort }));
@@ -44,7 +44,7 @@ export function startApprovalServer(callback: ApprovalCallback, port?: number): 
 
     console.log(`[approval-server] ${req.method} ${req.url}`);
 
-    // PreToolUse フックエンドポイント
+    // PreToolUse 钩子端点
     if (req.url === '/hooks/pre-tool-use' && req.method === 'POST') {
       try {
         const chunks: Buffer[] = [];
@@ -61,17 +61,17 @@ export function startApprovalServer(callback: ApprovalCallback, port?: number): 
           `[approval-server] Tool: ${toolName}, Input keys: ${Object.keys(toolInput).join(',')}`
         );
 
-        // 危険コマンド判定
+        // 危险命令判定
         const danger = detectDangerousTool(toolName, toolInput);
 
         if (!danger || !approvalCallback) {
-          // 危険でなければ許可（空レスポンスでOK）
+          // 如果没有危险则允许（返回空响应即可）
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end('{}');
           return;
         }
 
-        // 承認を待つ
+        // 等待批准
         console.log(
           `[approval-server] Dangerous tool detected: ${toolName} (${danger.matches.join(', ')})`
         );
@@ -101,7 +101,7 @@ export function startApprovalServer(callback: ApprovalCallback, port?: number): 
       } catch (err) {
         console.error('[approval-server] Error:', err);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end('{}'); // エラー時は許可（空=成功）
+        res.end('{}'); // 出错时允许（空=成功）
       }
       return;
     }
@@ -116,7 +116,7 @@ export function startApprovalServer(callback: ApprovalCallback, port?: number): 
 }
 
 /**
- * 承認サーバーを停止
+ * 停止批准服务器
  */
 export function stopApprovalServer(): void {
   if (server) {
@@ -126,15 +126,15 @@ export function stopApprovalServer(): void {
 }
 
 /**
- * 承認サーバーのポートを取得
+ * 获取批准服务器的端口
  */
 export function getApprovalServerPort(): number {
   return parseInt(process.env.APPROVAL_SERVER_PORT || String(DEFAULT_PORT), 10);
 }
 
 /**
- * 承認サーバーにHTTPリクエストを送ってツール実行の承認を得る
- * Local LLMバックエンドから呼ばれる（Claude Codeと同じ承認サーバーを使用）
+ * 发送 HTTP 请求到批准服务器以获取工具执行的批准
+ * 从 Local LLM 后端调用（使用与 Claude Code 相同的批准服务器）
  */
 export async function checkApprovalServer(
   toolName: string,
@@ -159,7 +159,7 @@ export async function checkApprovalServer(
     }
     return 'allow';
   } catch {
-    // 承認サーバーに接続できない場合は許可（fail-open）
+    // 无法连接到批准服务器时允许（故障开放）
     return 'allow';
   }
 }
