@@ -52,7 +52,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { startWebChat } from './web-chat.js';
 dotenvConfig({ override: true });
 
-/** メッセージを指定文字数で分割（カスタムセパレータ対応、デフォルトは行単位） */
+/** 将消息按指定字符数分割（支持自定义分隔符，默认为换行） */
 function splitMessage(text: string, maxLength: number, separator: string = '\n'): string[] {
   const chunks: string[] = [];
   const blocks = text.split(separator);
@@ -61,7 +61,7 @@ function splitMessage(text: string, maxLength: number, separator: string = '\n')
     const sep = current ? separator : '';
     if (current.length + sep.length + block.length > maxLength) {
       if (current) chunks.push(current.trim());
-      // 単一ブロックがmaxLengthを超える場合は行単位でフォールバック
+      // 如果单个块超过 maxLength，则按行回退处理
       if (block.length > maxLength) {
         const lines = block.split('\n');
         current = '';
@@ -84,14 +84,14 @@ function splitMessage(text: string, maxLength: number, separator: string = '\n')
   return chunks;
 }
 
-/** スケジュール一覧をDiscord向けに分割する */
+/** 将调度列表按 Discord 限制分割 */
 function splitScheduleContent(content: string, maxLength: number): string[] {
   const sep = '\n' + SCHEDULE_SEPARATOR + '\n';
   const chunks = splitMessage(content, maxLength, sep);
   return chunks.map((c) => c.replaceAll(SCHEDULE_SEPARATOR, ''));
 }
 
-/** スケジュールタイプに応じたラベルを生成 */
+/** 根据调度类型生成标签 */
 function getTypeLabel(
   type: ScheduleType,
   options: { expression?: string; runAt?: string; channelInfo?: string }
@@ -99,26 +99,26 @@ function getTypeLabel(
   const channelInfo = options.channelInfo || '';
   switch (type) {
     case 'cron':
-      return `🔄 繰り返し: \`${options.expression}\`${channelInfo}`;
+      return `🔄 重复: \`${options.expression}\`${channelInfo}`;
     case 'startup':
-      return `🚀 起動時に実行${channelInfo}`;
+      return `🚀 启动时执行${channelInfo}`;
     case 'once':
     default:
-      return `⏰ 実行時刻: ${new Date(options.runAt!).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}${channelInfo}`;
+      return `⏰ 执行时间: ${new Date(options.runAt!).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}${channelInfo}`;
   }
 }
 
-// チャンネルごとの最後に送信したボットメッセージID
+// 每个频道最后发送的机器人消息ID
 const lastSentMessageIds = new Map<string, string>();
 
-/** 処理中に表示するStopボタン */
+/** 处理中显示的停止按钮 */
 function createStopButton(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('xangi_stop').setLabel('Stop').setStyle(ButtonStyle.Secondary)
   );
 }
 
-/** 完了後に表示するNew Sessionボタン */
+/** 完成后显示的新会话按钮 */
 function createCompletedButtons(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('xangi_new').setLabel('New').setStyle(ButtonStyle.Secondary)
@@ -126,7 +126,7 @@ function createCompletedButtons(): ActionRowBuilder<ButtonBuilder> {
 }
 
 /**
- * ツール入力の要約を生成（Discord表示用）
+ * 生成工具输入摘要（用于 Discord 显示）
  */
 function formatToolInput(toolName: string, input: Record<string, unknown>): string {
   switch (toolName) {
@@ -153,7 +153,7 @@ function formatToolInput(toolName: string, input: Record<string, unknown>): stri
     case 'Skill':
       return input.skill ? `: ${String(input.skill)}` : '';
     default:
-      // MCPツール (mcp__server__tool 形式)
+      // MCP工具 (mcp__server__tool 格式)
       if (toolName.startsWith('mcp__')) {
         const parts = toolName.split('__');
         const server = parts[1] || '';
@@ -165,12 +165,12 @@ function formatToolInput(toolName: string, input: Record<string, unknown>): stri
 }
 
 /**
- * Discord用のツール承認コールバックを作成
+ * 创建 Discord 用的工具批准回调
  */
 async function main() {
   const config = loadConfig();
 
-  // 許可リストのチェック（"*" で全員許可、カンマ区切りで複数ユーザー対応）
+  // 检查允许列表（"*" 表示允许所有人，支持逗号分隔的多用户）
   const discordAllowed = config.discord.allowedUsers || [];
   const slackAllowed = config.slack.allowedUsers || [];
 
@@ -202,7 +202,7 @@ async function main() {
     ],
   });
 
-  // バックエンドリゾルバー & 動的ランナーマネージャーを作成
+  // 创建后端解析器和动态运行器管理器
   const resolver = new BackendResolver(config);
   const agentRunner = new DynamicRunnerManager(config, resolver);
   const backendName = getBackendDisplayName(config.agent.backend);
@@ -210,106 +210,106 @@ async function main() {
     `[xangi] Using ${backendName} as agent backend (platform: ${config.agent.platform ?? 'all'})`
   );
 
-  // スキルを読み込み
+  // 加载技能
   const workdir = config.agent.config.workdir || process.cwd();
   let skills: Skill[] = loadSkills(workdir);
   console.log(`[xangi] Loaded ${skills.length} skills from ${workdir}`);
 
-  // 設定を初期化
+  // 初始化设置
   initSettings(workdir);
   const initialSettings = loadSettings();
   console.log(`[xangi] Settings loaded: autoRestart=${initialSettings.autoRestart}`);
 
-  // スケジューラを初期化（ワークスペースの .xangi を使用）
+  // 初始化调度器（使用工作区的 .xangi）
   const dataDir = process.env.DATA_DIR || join(workdir, '.xangi');
   const scheduler = new Scheduler(dataDir);
 
-  // セッション永続化を初期化
+  // 初始化会话持久化
   initSessions(dataDir);
 
-  // WebチャットUI起動
+  // 启动 Web 聊天 UI
   if (process.env.WEB_CHAT_ENABLED === 'true') {
     startWebChat({ agentRunner });
   }
 
-  // GitHub認証を初期化
+  // 初始化 GitHub 认证
   const { initGitHubAuth } = await import('./github-auth.js');
   initGitHubAuth();
 
-  // ツール承認の有効/無効（デフォルト無効）
+  // 工具批准开关（默认禁用）
   if (process.env.APPROVAL_ENABLED === 'true') {
     setApprovalEnabled(true);
   }
 
-  // スラッシュコマンド定義
+  // 斜杠命令定义
   const commands: ReturnType<SlashCommandBuilder['toJSON']>[] = [
-    new SlashCommandBuilder().setName('new').setDescription('新しいセッションを開始する').toJSON(),
-    new SlashCommandBuilder().setName('stop').setDescription('実行中のタスクを停止する').toJSON(),
+    new SlashCommandBuilder().setName('new').setDescription('开始新会话').toJSON(),
+    new SlashCommandBuilder().setName('stop').setDescription('停止正在执行的任务').toJSON(),
     new SlashCommandBuilder()
       .setName('skills')
-      .setDescription('利用可能なスキル一覧を表示')
+      .setDescription('显示可用技能列表')
       .toJSON(),
     new SlashCommandBuilder()
       .setName('skill')
-      .setDescription('スキルを実行する')
+      .setDescription('执行技能')
       .addStringOption((option) =>
-        option.setName('name').setDescription('スキル名').setRequired(true).setAutocomplete(true)
+        option.setName('name').setDescription('技能名称').setRequired(true).setAutocomplete(true)
       )
-      .addStringOption((option) => option.setName('args').setDescription('引数').setRequired(false))
+      .addStringOption((option) => option.setName('args').setDescription('参数').setRequired(false))
       .toJSON(),
-    new SlashCommandBuilder().setName('settings').setDescription('現在の設定を表示する').toJSON(),
-    new SlashCommandBuilder().setName('restart').setDescription('ボットを再起動する').toJSON(),
+    new SlashCommandBuilder().setName('settings').setDescription('显示当前设置').toJSON(),
+    new SlashCommandBuilder().setName('restart').setDescription('重启机器人').toJSON(),
     new SlashCommandBuilder()
       .setName('skip')
-      .setDescription('許可確認をスキップしてメッセージを実行')
+      .setDescription('跳过权限确认并执行消息')
       .addStringOption((option) =>
-        option.setName('message').setDescription('実行するメッセージ').setRequired(true)
+        option.setName('message').setDescription('要执行的消息').setRequired(true)
       )
       .toJSON(),
     new SlashCommandBuilder()
       .setName('schedule')
-      .setDescription('スケジュール管理')
+      .setDescription('调度管理')
       .addSubcommand((sub) =>
         sub
           .setName('add')
-          .setDescription('スケジュールを追加')
+          .setDescription('添加调度')
           .addStringOption((opt) =>
             opt
               .setName('input')
-              .setDescription('例: "30分後 ミーティング" / "毎日 9:00 おはよう"')
+              .setDescription('示例: "30分钟后 会议" / "每天 9:00 早上好"')
               .setRequired(true)
           )
       )
-      .addSubcommand((sub) => sub.setName('list').setDescription('スケジュール一覧を表示'))
+      .addSubcommand((sub) => sub.setName('list').setDescription('显示调度列表'))
       .addSubcommand((sub) =>
         sub
           .setName('remove')
-          .setDescription('スケジュールを削除')
+          .setDescription('删除调度')
           .addStringOption((opt) =>
-            opt.setName('id').setDescription('スケジュールID').setRequired(true)
+            opt.setName('id').setDescription('调度ID').setRequired(true)
           )
       )
       .addSubcommand((sub) =>
         sub
           .setName('toggle')
-          .setDescription('スケジュールの有効/無効を切り替え')
+          .setDescription('切换调度的启用/禁用')
           .addStringOption((opt) =>
-            opt.setName('id').setDescription('スケジュールID').setRequired(true)
+            opt.setName('id').setDescription('调度ID').setRequired(true)
           )
       )
       .toJSON(),
     new SlashCommandBuilder()
       .setName('backend')
-      .setDescription('バックエンド/モデルの切り替え')
-      .addSubcommand((sub) => sub.setName('show').setDescription('現在のバックエンド設定を表示'))
+      .setDescription('切换后端/模型')
+      .addSubcommand((sub) => sub.setName('show').setDescription('显示当前后端设置'))
       .addSubcommand((sub) =>
         sub
           .setName('set')
-          .setDescription('バックエンド/モデルを設定')
+          .setDescription('设置后端/模型')
           .addStringOption((opt) =>
             opt
               .setName('type')
-              .setDescription('バックエンド名')
+              .setDescription('后端名称')
               .setRequired(true)
               .addChoices(
                 { name: 'Claude Code', value: 'claude-code' },
@@ -318,13 +318,13 @@ async function main() {
                 { name: 'Local LLM', value: 'local-llm' }
               )
           )
-          .addStringOption((opt) => opt.setName('model').setDescription('モデル名'))
+          .addStringOption((opt) => opt.setName('model').setDescription('模型名称'))
           .addStringOption((opt) =>
             opt
               .setName('effort')
-              .setDescription('effortレベル（Claude Code用）')
+              .setDescription('effort级别（用于Claude Code）')
               .addChoices(
-                { name: 'デフォルト', value: 'none' },
+                { name: '默认', value: 'none' },
                 { name: 'low', value: 'low' },
                 { name: 'medium', value: 'medium' },
                 { name: 'high', value: 'high' },
@@ -332,16 +332,16 @@ async function main() {
               )
           )
       )
-      .addSubcommand((sub) => sub.setName('reset').setDescription('デフォルトに戻す'))
+      .addSubcommand((sub) => sub.setName('reset').setDescription('恢复默认'))
       .addSubcommand((sub) =>
-        sub.setName('list').setDescription('利用可能なバックエンド一覧を表示')
+        sub.setName('list').setDescription('显示可用后端列表')
       )
       .toJSON(),
   ];
 
-  // 各スキルを個別のスラッシュコマンドとして追加
+  // 将每个技能作为单独的斜杠命令添加
   for (const skill of skills) {
-    // Discordコマンド名は小文字英数字とハイフンのみ（最大32文字）
+    // Discord命令名称仅限小写字母数字和连字符（最大32字符）
     const cmdName = skill.name
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, '-')
@@ -353,25 +353,25 @@ async function main() {
       commands.push(
         new SlashCommandBuilder()
           .setName(cmdName)
-          .setDescription(skill.description.slice(0, 100) || `${skill.name}スキルを実行`)
+          .setDescription(skill.description.slice(0, 100) || `执行${skill.name}技能`)
           .addStringOption((option) =>
-            option.setName('args').setDescription('引数（任意）').setRequired(false)
+            option.setName('args').setDescription('参数（可选）').setRequired(false)
           )
           .toJSON()
       );
     }
   }
 
-  // スラッシュコマンド登録
+  // 注册斜杠命令
   client.once(Events.ClientReady, async (c) => {
     console.log(`[xangi] Ready! Logged in as ${c.user.tag}`);
 
-    // ツール承認サーバー起動（Claude Code PreToolUseフック用）
+    // 启动工具批准服务器（用于 Claude Code PreToolUse 钩子）
     const { startApprovalServer } = await import('./approval-server.js');
     startApprovalServer(async (toolName, toolInput, dangerDescription) => {
-      // 最初のauto-replyチャンネルに承認メッセージを送信
+      // 向第一个自动回复频道发送批准消息
       const approvalChannelId = config.discord.autoReplyChannels?.[0];
-      if (!approvalChannelId) return true; // チャンネル未設定なら許可
+      if (!approvalChannelId) return true; // 未设置频道则允许
       const channel = c.channels.cache.get(approvalChannelId);
       if (!channel || !('send' in channel)) return true;
 
@@ -387,28 +387,28 @@ async function main() {
           const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
               .setCustomId(`xangi_approve_${approvalId}`)
-              .setLabel('許可')
+              .setLabel('允许')
               .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
               .setCustomId(`xangi_deny_${approvalId}`)
-              .setLabel('拒否')
+              .setLabel('拒绝')
               .setStyle(ButtonStyle.Danger)
           );
           (channel as unknown as { send: (opts: unknown) => Promise<unknown> }).send({
-            content: `⚠️ **危険なコマンドを検知**\n\`\`\`\n${danger.command}\n\`\`\`\n${danger.matches.join(', ')}\n\n2分以内に応答がなければ自動拒否`,
+            content: `⚠️ **检测到危险命令**\n\`\`\`\n${danger.command}\n\`\`\`\n${danger.matches.join(', ')}\n\n2分钟内无响应则自动拒绝`,
             components: [row],
           });
         }
       );
     });
 
-    // ツールサーバー起動（Claude Codeからcurlで叩くAPI）
+    // 启动工具服务器（供 Claude Code 通过 curl 调用的 API）
     const { startToolServer } = await import('./tool-server.js');
     startToolServer();
 
     const rest = new REST({ version: '10' }).setToken(config.discord.token);
     try {
-      // ギルドコマンドとして登録（即時反映）
+      // 注册为公会命令（即时生效）
       const guilds = c.guilds.cache;
       console.log(`[xangi] Found ${guilds.size} guilds`);
 
@@ -419,7 +419,7 @@ async function main() {
         console.log(`[xangi] ${commands.length} slash commands registered for: ${guild.name}`);
       }
 
-      // グローバルコマンドをクリア（重複防止）
+      // 清除全局命令（防止重复）
       await rest.put(Routes.applicationCommands(c.user.id), { body: [] });
       console.log('[xangi] Cleared global commands');
     } catch (error) {
@@ -427,23 +427,23 @@ async function main() {
     }
   });
 
-  // スラッシュコマンド処理
+  // 斜杠命令处理
   client.on(Events.InteractionCreate, async (interaction) => {
-    // オートコンプリート処理
+    // 自动补全处理
     if (interaction.isAutocomplete()) {
       await handleAutocomplete(interaction, skills);
       return;
     }
 
-    // ボタンインタラクション処理
+    // 按钮交互处理
     if (interaction.isButton()) {
       const channelId = interaction.channelId;
-      // 許可チェック
+      // 权限检查
       if (
         !config.discord.allowedUsers?.includes('*') &&
         !config.discord.allowedUsers?.includes(interaction.user.id)
       ) {
-        await interaction.reply({ content: '許可されていないユーザーです', ephemeral: true });
+        await interaction.reply({ content: '未授权的用户', ephemeral: true });
         return;
       }
 
@@ -452,7 +452,7 @@ async function main() {
         await interaction.deferUpdate().catch(() => {});
         if (!stopped) {
           await interaction.followUp({
-            content: '実行中のタスクがありません',
+            content: '没有正在执行的任务',
             ephemeral: true,
           });
         }
@@ -462,45 +462,45 @@ async function main() {
       if (interaction.customId === 'xangi_new') {
         deleteSession(channelId);
         agentRunner.destroy?.(channelId);
-        // ボタンを消してメッセージを更新
+        // 删除按钮并更新消息
         await interaction
           .update({
             components: [],
           })
           .catch(() => {});
         await interaction
-          .followUp({ content: '🆕 新しいセッションを開始しました', ephemeral: true })
+          .followUp({ content: '🆕 已开始新会话', ephemeral: true })
           .catch(() => {});
         return;
       }
 
-      // 承認ボタン
+      // 批准按钮
       if (interaction.customId.startsWith('xangi_approve_')) {
         const approvalId = interaction.customId.replace('xangi_approve_', '');
         resolveApproval(approvalId, true);
-        await interaction.update({ content: '✅ 許可しました', components: [] }).catch(() => {});
+        await interaction.update({ content: '✅ 已允许', components: [] }).catch(() => {});
         return;
       }
       if (interaction.customId.startsWith('xangi_deny_')) {
         const approvalId = interaction.customId.replace('xangi_deny_', '');
         resolveApproval(approvalId, false);
-        await interaction.update({ content: '❌ 拒否しました', components: [] }).catch(() => {});
+        await interaction.update({ content: '❌ 已拒绝', components: [] }).catch(() => {});
         return;
       }
 
-      // 未知のボタン → 何もせずACK
+      // 未知按钮 → 只回复 ACK
       await interaction.deferUpdate().catch(() => {});
       return;
     }
 
     if (!interaction.isChatInputCommand()) return;
 
-    // 許可リストチェック（"*" で全員許可）
+    // 权限列表检查（"*" 表示允许所有人）
     if (
       !config.discord.allowedUsers?.includes('*') &&
       !config.discord.allowedUsers?.includes(interaction.user.id)
     ) {
-      await interaction.reply({ content: '許可されていないユーザーです', ephemeral: true });
+      await interaction.reply({ content: '未授权的用户', ephemeral: true });
       return;
     }
 
@@ -509,16 +509,16 @@ async function main() {
     if (interaction.commandName === 'new') {
       deleteSession(channelId);
       agentRunner.destroy?.(channelId);
-      await interaction.reply('🆕 新しいセッションを開始しました');
+      await interaction.reply('🆕 已开始新会话');
       return;
     }
 
     if (interaction.commandName === 'stop') {
       const stopped = processManager.stop(channelId) || agentRunner.cancel?.(channelId) || false;
       if (stopped) {
-        await interaction.reply('🛑 タスクを停止しました');
+        await interaction.reply('🛑 已停止任务');
       } else {
-        await interaction.reply({ content: '実行中のタスクはありません', ephemeral: true });
+        await interaction.reply({ content: '没有正在执行的任务', ephemeral: true });
       }
       return;
     }
@@ -537,19 +537,19 @@ async function main() {
         const override = resolver.getChannelOverride(channelId);
         const defaultRes = resolver.getDefault();
         const lines = [
-          `**現在のバックエンド設定** (<#${channelId}>)`,
-          `- バックエンド: **${getBackendDisplayName(resolved.backend)}**`,
+          `**当前后端设置** (<#${channelId}>)`,
+          `- 后端: **${getBackendDisplayName(resolved.backend)}**`,
         ];
-        if (resolved.model) lines.push(`- モデル: ${resolved.model}`);
+        if (resolved.model) lines.push(`- 模型: ${resolved.model}`);
         if (resolved.effort) lines.push(`- effort: ${resolved.effort}`);
         if (override) {
-          lines.push(`- ソース: チャンネル設定`);
+          lines.push(`- 来源: 频道设置`);
         } else {
-          lines.push(`- ソース: デフォルト (.env)`);
+          lines.push(`- 来源: 默认 (.env)`);
         }
         lines.push(
           ``,
-          `**デフォルト:** ${getBackendDisplayName(defaultRes.backend)}${defaultRes.model ? ` (${defaultRes.model})` : ''}`
+          `**默认:** ${getBackendDisplayName(defaultRes.backend)}${defaultRes.model ? ` (${defaultRes.model})` : ''}`
         );
         await interaction.reply(lines.join('\n'));
         return;
@@ -567,17 +567,17 @@ async function main() {
             ? (rawEffort as import('./config.js').EffortLevel)
             : undefined;
 
-        // 許可チェック: ALLOWED_BACKENDSが未設定なら切り替え不可
+        // 权限检查：如果 ALLOWED_BACKENDS 未设置则不可切换
         if (!resolver.isBackendAllowed(backendValue)) {
           const allowedBackends = resolver.getAllowedBackends();
           if (!config.agent.allowedBackends) {
             await interaction.reply({
-              content: `❌ バックエンド切り替えが有効になっていません。\n.envに \`ALLOWED_BACKENDS\` を設定してください。`,
+              content: `❌ 后端切换未启用。\n请在 .env 中设置 \`ALLOWED_BACKENDS\`。`,
               ephemeral: true,
             });
           } else {
             await interaction.reply({
-              content: `❌ バックエンド \`${backendValue}\` は許可されていません\n許可: ${allowedBackends.map((b) => getBackendDisplayName(b)).join(', ')}`,
+              content: `❌ 后端 \`${backendValue}\` 未允许\n允许: ${allowedBackends.map((b) => getBackendDisplayName(b)).join(', ')}`,
               ephemeral: true,
             });
           }
@@ -585,13 +585,13 @@ async function main() {
         }
         if (modelValue && !resolver.isModelAllowed(modelValue)) {
           await interaction.reply({
-            content: `❌ モデル \`${modelValue}\` は許可されていません`,
+            content: `❌ 模型 \`${modelValue}\` 未允许`,
             ephemeral: true,
           });
           return;
         }
 
-        // Local LLMの場合、Ollamaにモデルが存在するか確認
+        // Local LLM 的情况，检查 Ollama 中是否存在该模型
         if (backendValue === 'local-llm' && modelValue) {
           try {
             const ollamaBase = process.env.LOCAL_LLM_BASE_URL || 'http://localhost:11434';
@@ -603,46 +603,46 @@ async function main() {
                 models?: Array<{ name: string }>;
               };
               const modelNames = data.models?.map((m) => m.name) ?? [];
-              // "qwen3.5:9b" と "qwen3.5:9b" の完全一致、または "qwen3.5" のようなプレフィックス一致
+              // 完全匹配 "qwen3.5:9b"，或前缀匹配如 "qwen3.5"
               const found = modelNames.some(
                 (n) => n === modelValue || n.startsWith(modelValue + ':')
               );
               if (!found) {
                 await interaction.reply({
-                  content: `❌ モデル \`${modelValue}\` はOllamaにインストールされていません\nインストール済み: ${modelNames.map((n) => `\`${n}\``).join(', ')}`,
+                  content: `❌ 模型 \`${modelValue}\` 未安装到 Ollama\n已安装: ${modelNames.map((n) => `\`${n}\``).join(', ')}`,
                   ephemeral: true,
                 });
                 return;
               }
             }
           } catch {
-            // Ollama接続失敗は無視（モデル確認をスキップ）
+            // Ollama 连接失败则跳过模型检查
           }
         }
 
-        // channelOverrides に保存
+        // 保存到 channelOverrides
         resolver.setChannelOverride(channelId, {
           backend: backendValue,
           model: modelValue,
           effort: effortValue,
         });
 
-        // セッション & ランナー破棄
+        // 销毁会话和运行器
         agentRunner.switchBackend(channelId);
 
-        // 切り替え結果を明確に表示
+        // 明确显示切换结果
         const display = getBackendDisplayName(backendValue);
         const resolvedModel =
           modelValue ||
           (backendValue === 'local-llm'
-            ? process.env.LOCAL_LLM_MODEL || '(デフォルト)'
+            ? process.env.LOCAL_LLM_MODEL || '(默认)'
             : backendValue === 'claude-code'
-              ? process.env.AGENT_MODEL || 'Claude (デフォルト)'
-              : '(デフォルト)');
+              ? process.env.AGENT_MODEL || 'Claude (默认)'
+              : '(默认)');
         const lines = [
-          `🔄 モデルを切り替えました。新しいセッションを開始します。`,
-          `- バックエンド: **${display}**`,
-          `- モデル: **${resolvedModel}**`,
+          `🔄 已切换模型。将开始新会话。`,
+          `- 后端: **${display}**`,
+          `- 模型: **${resolvedModel}**`,
         ];
         if (effortValue) lines.push(`- effort: **${effortValue}**`);
         await interaction.reply(lines.join('\n'));
@@ -654,7 +654,7 @@ async function main() {
         agentRunner.switchBackend(channelId);
         const defaultRes = resolver.getDefault();
         await interaction.reply(
-          `🔄 デフォルト (**${getBackendDisplayName(defaultRes.backend)}**) に戻しました。新しいセッションを開始します。`
+          `🔄 已恢复默认 (**${getBackendDisplayName(defaultRes.backend)}**)。将开始新会话。`
         );
         return;
       }
@@ -664,19 +664,19 @@ async function main() {
         const allowed = resolver.getAllowedBackends();
         const allowedModels = resolver.getAllowedModels();
         const defaultRes = resolver.getDefault();
-        const lines = ['**利用可能なバックエンド:**'];
+        const lines = ['**可用后端:**'];
         for (const b of allowed) {
           const isDefault = b === defaultRes.backend;
-          lines.push(`- ${getBackendDisplayName(b)}${isDefault ? ' (デフォルト)' : ''}`);
+          lines.push(`- ${getBackendDisplayName(b)}${isDefault ? ' (默认)' : ''}`);
         }
         if (allowedModels && allowedModels.length > 0) {
-          lines.push('', '**許可モデル:**');
+          lines.push('', '**允许的模型:**');
           for (const m of allowedModels) {
             lines.push(`- \`${m}\``);
           }
         }
 
-        // Ollamaモデル一覧を取得（Local LLMが許可されている場合）
+        // 如果允许 Local LLM，获取 Ollama 模型列表
         if (allowed.includes('local-llm')) {
           try {
             const ollamaBase = process.env.LOCAL_LLM_BASE_URL || 'http://localhost:11434';
@@ -688,7 +688,7 @@ async function main() {
                 models?: Array<{ name: string; size: number }>;
               };
               if (data.models && data.models.length > 0) {
-                lines.push('', '**Ollamaモデル（インストール済み）:**');
+                lines.push('', '**Ollama 模型（已安装）:**');
                 for (const m of data.models) {
                   const sizeGB = (m.size / 1e9).toFixed(1);
                   lines.push(`- \`${m.name}\` (${sizeGB}GB)`);
@@ -696,12 +696,12 @@ async function main() {
               }
             }
           } catch {
-            // Ollama接続失敗は無視
+            // Ollama 连接失败则忽略
           }
         }
 
         if (!config.agent.allowedBackends) {
-          lines.push('', '⚠️ `ALLOWED_BACKENDS` が未設定のため、切り替えは無効です。');
+          lines.push('', '⚠️ 未设置 `ALLOWED_BACKENDS`，切换功能已禁用。');
         }
 
         await interaction.editReply(lines.join('\n'));
@@ -717,7 +717,7 @@ async function main() {
         const sessionId = getSession(channelId);
         const appSessionId = ensureSession(channelId, { platform: 'discord' });
 
-        // ワンショットのClaudeCodeRunnerを使用（skipPermissionsを確実に反映するため）
+        // 使用一次性 ClaudeCodeRunner（确保 skipPermissions 生效）
         const skipRunner = new ClaudeCodeRunner(config.agent.config);
         const runResult = await skipRunner.run(skipMessage, {
           skipPermissions: true,
@@ -728,7 +728,7 @@ async function main() {
 
         setSession(channelId, runResult.sessionId);
 
-        // ファイルパスを抽出して添付送信
+        // 提取文件路径并发送附件
         const filePaths = extractFilePaths(runResult.result);
         const displayText =
           filePaths.length > 0 ? stripFilePaths(runResult.result) : runResult.result;
@@ -745,7 +745,7 @@ async function main() {
           }
         }
 
-        // ファイル添付送信
+        // 发送文件附件
         if (filePaths.length > 0 && interaction.channel && 'send' in interaction.channel) {
           try {
             await (
@@ -761,10 +761,10 @@ async function main() {
           }
         }
 
-        // SYSTEM_COMMAND処理
+        // SYSTEM_COMMAND 处理
         handleSettingsFromResponse(runResult.result);
 
-        // !discord コマンド処理
+        // !discord 命令处理
         if (interaction.channel) {
           const fakeMessage = { channel: interaction.channel } as Message;
           await handleDiscordCommandsInResponse(runResult.result, fakeMessage);
@@ -773,13 +773,13 @@ async function main() {
         const errorMsg = error instanceof Error ? error.message : String(error);
         let errorDetail: string;
         if (errorMsg.includes('timed out')) {
-          errorDetail = `⏱️ タイムアウトしました`;
+          errorDetail = `⏱️ 超时了`;
         } else if (errorMsg.includes('Process exited unexpectedly')) {
-          errorDetail = `💥 AIプロセスが予期せず終了しました`;
+          errorDetail = `💥 AI进程意外终止`;
         } else if (errorMsg.includes('Circuit breaker')) {
-          errorDetail = '🔌 AIプロセスが一時停止中です';
+          errorDetail = '🔌 AI进程暂时暂停中';
         } else {
-          errorDetail = `❌ エラー: ${errorMsg.slice(0, 200)}`;
+          errorDetail = `❌ 错误: ${errorMsg.slice(0, 200)}`;
         }
         await interaction.editReply(errorDetail).catch(() => {});
       }
@@ -789,10 +789,10 @@ async function main() {
     if (interaction.commandName === 'restart') {
       const settings = loadSettings();
       if (!settings.autoRestart) {
-        await interaction.reply('⚠️ 自動再起動が無効です。先に有効にしてください。');
+        await interaction.reply('⚠️ 自动重启已禁用。请先启用。');
         return;
       }
-      await interaction.reply('🔄 再起動します...');
+      await interaction.reply('🔄 即将重启...');
       setTimeout(() => process.exit(0), 1000);
       return;
     }
@@ -803,7 +803,7 @@ async function main() {
     }
 
     if (interaction.commandName === 'skills') {
-      // スキルを再読み込み
+      // 重新加载技能
       skills = loadSkills(workdir);
       await interaction.reply(formatSkillList(skills));
       return;
@@ -814,7 +814,7 @@ async function main() {
       return;
     }
 
-    // 個別スキルコマンドの処理
+    // 处理单个技能命令
     const matchedSkill = skills.find((s) => {
       const cmdName = s.name
         .toLowerCase()
@@ -831,7 +831,7 @@ async function main() {
     }
   });
 
-  // Discordリンクからメッセージ内容を取得する関数
+  // 从 Discord 链接获取消息内容的函数
   async function fetchDiscordLinkContent(text: string): Promise<string> {
     const linkRegex = /https?:\/\/(?:www\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/g;
     const matches = [...text.matchAll(linkRegex)];
@@ -846,26 +846,26 @@ async function main() {
         if (channel && 'messages' in channel) {
           const fetchedMessage = await channel.messages.fetch(messageId);
           const author = fetchedMessage.author.tag;
-          const content = fetchedMessage.content || '(添付ファイルのみ)';
+          const content = fetchedMessage.content || '(仅附件)';
           const attachmentInfo =
             fetchedMessage.attachments.size > 0
-              ? `\n[添付: ${fetchedMessage.attachments.map((a) => a.name).join(', ')}]`
+              ? `\n[附件: ${fetchedMessage.attachments.map((a) => a.name).join(', ')}]`
               : '';
 
-          const quotedContent = `\n---\n📎 引用メッセージ (${author}):\n${content}${attachmentInfo}\n---\n`;
+          const quotedContent = `\n---\n📎 引用消息 (${author}):\n${content}${attachmentInfo}\n---\n`;
           result = result.replace(fullUrl, quotedContent);
           console.log(`[xangi] Fetched linked message from channel ${channelId}`);
         }
       } catch (err) {
         console.error(`[xangi] Failed to fetch linked message: ${fullUrl}`, err);
-        // 取得失敗時はリンクをそのまま残す
+        // 获取失败时保留原链接
       }
     }
 
     return result;
   }
 
-  // 返信元メッセージを取得してプロンプトに追加する関数
+  // 获取回复源消息并添加到提示词中的函数
   async function fetchReplyContent(message: Message): Promise<string | null> {
     if (!message.reference?.messageId) return null;
 
@@ -875,14 +875,14 @@ async function main() {
 
       const repliedMessage = await channel.messages.fetch(message.reference.messageId);
       const author = repliedMessage.author.tag;
-      const content = repliedMessage.content || '(添付ファイルのみ)';
+      const content = repliedMessage.content || '(仅附件)';
       const attachmentInfo =
         repliedMessage.attachments.size > 0
-          ? `\n[添付: ${repliedMessage.attachments.map((a) => a.name).join(', ')}]`
+          ? `\n[附件: ${repliedMessage.attachments.map((a) => a.name).join(', ')}]`
           : '';
 
       console.log(`[xangi] Fetched reply-to message from ${author}`);
-      return `\n---\n💬 返信元 (${author}):\n${content}${attachmentInfo}\n---\n`;
+      return `\n---\n💬 回复源 (${author}):\n${content}${attachmentInfo}\n---\n`;
     } catch (err) {
       console.error(`[xangi] Failed to fetch reply-to message:`, err);
       return null;
@@ -890,14 +890,14 @@ async function main() {
   }
 
   /**
-   * メッセージコンテンツ内のチャンネルメンション <#ID> を無害化する
-   * fetchChannelMessages() による意図しない二重展開を防ぐ
+   * 无害化消息内容中的频道提及 <#ID>
+   * 防止 fetchChannelMessages() 导致的意外二次展开
    */
   function sanitizeChannelMentions(content: string): string {
     return content.replace(/<#(\d+)>/g, '#$1');
   }
 
-  // チャンネルメンションから最新メッセージを取得する関数
+  // 从频道提及获取最新消息的函数
   async function fetchChannelMessages(text: string): Promise<string> {
     const channelMentionRegex = /<#(\d+)>/g;
     const matches = [...text.matchAll(channelMentionRegex)];
@@ -917,12 +917,12 @@ async function main() {
             .reverse()
             .map((m) => {
               const time = m.createdAt.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-              const content = sanitizeChannelMentions(m.content || '(添付ファイルのみ)');
+              const content = sanitizeChannelMentions(m.content || '(仅附件)');
               return `[${time}] ${m.author.tag}: ${content}`;
             })
             .join('\n');
 
-          const expandedContent = `\n---\n📺 #${channelName} の最新メッセージ:\n${messageList}\n---\n`;
+          const expandedContent = `\n---\n📺 #${channelName} 的最新消息:\n${messageList}\n---\n`;
           result = result.replace(fullMention, expandedContent);
           console.log(`[xangi] Fetched messages from channel #${channelName}`);
         }
@@ -935,15 +935,15 @@ async function main() {
   }
 
   /**
-   * チャンネルメンション <#ID> にチャンネルID注釈を追加
-   * 例: <#123456> → <#123456> [チャンネルID: 123456]
+   * 为频道提及 <#ID> 添加频道ID注释
+   * 示例: <#123456> → <#123456> [频道ID: 123456]
    */
   function annotateChannelMentions(text: string): string {
-    return text.replace(/<#(\d+)>/g, (match, id) => `${match} [チャンネルID: ${id}]`);
+    return text.replace(/<#(\d+)>/g, (match, id) => `${match} [频道ID: ${id}]`);
   }
 
   /**
-   * Discord の 2000 文字制限に合わせてメッセージを分割する
+   * 根据 Discord 的 2000 字符限制分割消息
    */
   function chunkDiscordMessage(message: string, limit = DISCORD_MAX_LENGTH): string[] {
     if (message.length <= limit) return [message];
@@ -953,7 +953,7 @@ async function main() {
 
     for (const line of message.split('\n')) {
       if (line.length > limit) {
-        // 1行が limit 超え → バッファをフラッシュしてハードスプリット
+        // 单行超过限制 → 刷新缓冲区并硬分割
         if (buf) {
           chunks.push(buf);
           buf = '';
@@ -975,14 +975,14 @@ async function main() {
     return chunks;
   }
 
-  // Discordコマンドを処理する関数
-  // feedback: true の場合、response をDiscordに送信せずエージェントに再注入する
+  // 处理 Discord 命令的函数
+  // feedback: true 时，不将 response 发送到 Discord，而是重新注入到代理
   async function handleDiscordCommand(
     text: string,
     sourceMessage?: Message,
     fallbackChannelId?: string
   ): Promise<{ handled: boolean; response?: string; feedback?: boolean }> {
-    // !discord send <#channelId> message (複数行対応)
+    // !discord send <#channelId> message (支持多行)
     const sendMatch = text.match(/^!discord\s+send\s+<#(\d+)>\s+(.+)$/s);
     if (sendMatch) {
       const [, channelId, content] = sendMatch;
@@ -995,7 +995,7 @@ async function main() {
               allowedMentions: { parse: never[] };
             }) => Promise<unknown>;
           };
-          // 2000文字制限に合わせて分割送信
+          // 按2000字符限制分割发送
           const chunks = chunkDiscordMessage(content);
           for (const chunk of chunks) {
             await typedChannel.send({
@@ -1005,11 +1005,11 @@ async function main() {
           }
           const channelName = 'name' in channel ? channel.name : 'unknown';
           console.log(`[xangi] Sent message to #${channelName} (${chunks.length} chunk(s))`);
-          return { handled: true, response: `✅ #${channelName} にメッセージを送信しました` };
+          return { handled: true, response: `✅ 已向 #${channelName} 发送消息` };
         }
       } catch (err) {
         console.error(`[xangi] Failed to send message to channel: ${channelId}`, err);
-        return { handled: true, response: `❌ チャンネルへの送信に失敗しました` };
+        return { handled: true, response: `❌ 向频道发送消息失败` };
       }
     }
 
@@ -1018,25 +1018,25 @@ async function main() {
       if (!sourceMessage) {
         return {
           handled: true,
-          response: '⚠️ channels コマンドはスケジューラーからは使用できません',
+          response: '⚠️ channels 命令不能从调度器使用',
         };
       }
       try {
         const guild = sourceMessage.guild;
         if (guild) {
           const channels = guild.channels.cache
-            .filter((c) => c.type === 0) // テキストチャンネルのみ
+            .filter((c) => c.type === 0) // 仅文本频道
             .map((c) => `- #${c.name} (<#${c.id}>)`)
             .join('\n');
-          return { handled: true, response: `📺 チャンネル一覧:\n${channels}` };
+          return { handled: true, response: `📺 频道列表:\n${channels}` };
         }
       } catch (err) {
         console.error(`[xangi] Failed to list channels`, err);
-        return { handled: true, response: `❌ チャンネル一覧の取得に失敗しました` };
+        return { handled: true, response: `❌ 获取频道列表失败` };
       }
     }
 
-    // !discord history [件数] [offset:N] [チャンネルID]
+    // !discord history [数量] [offset:偏移量] [频道ID]
     const historyMatch = text.match(
       /^!discord\s+history(?:\s+(\d+))?(?:\s+offset:(\d+))?(?:\s+<#(\d+)>)?$/
     );
@@ -1057,7 +1057,7 @@ async function main() {
         if (targetChannel && 'messages' in targetChannel) {
           let beforeId: string | undefined;
 
-          // offset指定時: まずoffset分のメッセージを取得してスキップ
+          // 指定 offset 时：先获取 offset 条消息并跳过
           if (offset > 0) {
             const skipMessages = await targetChannel.messages.fetch({ limit: offset });
             if (skipMessages.size > 0) {
@@ -1079,7 +1079,7 @@ async function main() {
             .map((m) => {
               const time = m.createdAt.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
               const content = sanitizeChannelMentions(
-                (m.content || '(添付ファイルのみ)').slice(0, 200)
+                (m.content || '(仅附件)').slice(0, 200)
               );
               const attachments =
                 m.attachments.size > 0
@@ -1090,14 +1090,14 @@ async function main() {
             .join('\n');
 
           const offsetLabel =
-            offset > 0 ? `${rangeStart}〜${rangeEnd}件目` : `最新${messages.size}件`;
+            offset > 0 ? `第${rangeStart}〜${rangeEnd}条` : `最新${messages.size}条`;
           console.log(
             `[xangi] Fetched ${messages.size} history messages from #${channelName} (offset: ${offset})`
           );
           return {
             handled: true,
             feedback: true,
-            response: `📺 #${channelName} のチャンネル履歴（${offsetLabel}）:\n${messageList}`,
+            response: `📺 #${channelName} 的频道历史（${offsetLabel}）:\n${messageList}`,
           };
         }
 
@@ -1106,28 +1106,28 @@ async function main() {
             handled: true,
             feedback: true,
             response:
-              '⚠️ history コマンドはチャンネルIDを指定してください（例: !discord history 20 <#123>）',
+              '⚠️ history 命令请指定频道ID（示例: !discord history 20 <#123>）',
           };
         }
-        return { handled: true, feedback: true, response: '❌ チャンネルが見つかりません' };
+        return { handled: true, feedback: true, response: '❌ 未找到频道' };
       } catch (err) {
         console.error(`[xangi] Failed to fetch history`, err);
-        return { handled: true, feedback: true, response: '❌ 履歴の取得に失敗しました' };
+        return { handled: true, feedback: true, response: '❌ 获取历史失败' };
       }
     }
 
-    // !discord search <keyword>
+    // !discord search <关键词>
     const searchMatch = text.match(/^!discord\s+search\s+(.+)$/);
     if (searchMatch) {
       if (!sourceMessage) {
         return {
           handled: true,
-          response: '⚠️ search コマンドはスケジューラーからは使用できません',
+          response: '⚠️ search 命令不能从调度器使用',
         };
       }
       const [, keyword] = searchMatch;
       try {
-        // 現在のチャンネルで検索
+        // 在当前频道搜索
         const channel = sourceMessage.channel;
         if ('messages' in channel) {
           const messages = await channel.messages.fetch({ limit: 100 });
@@ -1145,22 +1145,22 @@ async function main() {
             return {
               handled: true,
               feedback: true,
-              response: `🔍 「${keyword}」の検索結果 (${matched.size}件):\n${results}`,
+              response: `🔍 “${keyword}” 的搜索结果 (${matched.size}条):\n${results}`,
             };
           }
         }
         return {
           handled: true,
           feedback: true,
-          response: `🔍 「${keyword}」に一致するメッセージが見つかりませんでした`,
+          response: `🔍 未找到与“${keyword}”匹配的消息`,
         };
       } catch (err) {
         console.error(`[xangi] Failed to search messages`, err);
-        return { handled: true, response: `❌ 検索に失敗しました` };
+        return { handled: true, response: `❌ 搜索失败` };
       }
     }
 
-    // !discord delete <messageId or link>
+    // !discord delete <messageId 或 link>
     const deleteMatch = text.match(/^!discord\s+delete\s+(.+)$/);
     if (deleteMatch) {
       const arg = deleteMatch[1].trim();
@@ -1169,7 +1169,7 @@ async function main() {
         let messageId: string;
         let targetChannelId: string | undefined;
 
-        // メッセージリンクからチャンネルIDとメッセージIDを抽出
+        // 从消息链接中提取频道ID和消息ID
         const linkMatch = arg.match(/discord\.com\/channels\/\d+\/(\d+)\/(\d+)/);
         if (linkMatch) {
           targetChannelId = linkMatch[1];
@@ -1180,11 +1180,11 @@ async function main() {
           return {
             handled: true,
             feedback: true,
-            response: '❌ 無効な形式です。メッセージIDまたはリンクを指定してください',
+            response: '❌ 格式无效。请指定消息ID或链接',
           };
         }
 
-        // リンクからチャンネルIDが取れた場合はそのチャンネルを使う、なければ現在のチャンネル
+        // 如果从链接获取到了频道ID则使用该频道，否则使用当前频道
         let channel;
         if (targetChannelId) {
           channel = await client.channels.fetch(targetChannelId);
@@ -1196,28 +1196,28 @@ async function main() {
 
         if (channel && 'messages' in channel) {
           const msg = await channel.messages.fetch(messageId);
-          // 自分のメッセージのみ削除可能
+          // 只能删除自己的消息
           if (msg.author.id !== client.user?.id) {
             return {
               handled: true,
               feedback: true,
-              response: '❌ 自分のメッセージのみ削除できます',
+              response: '❌ 只能删除自己的消息',
             };
           }
           await msg.delete();
           const deletedChannelId =
             targetChannelId || sourceMessage?.channel.id || fallbackChannelId;
           console.log(`[xangi] Deleted message ${messageId} in channel ${deletedChannelId}`);
-          return { handled: true, feedback: true, response: '🗑️ メッセージを削除しました' };
+          return { handled: true, feedback: true, response: '🗑️ 已删除消息' };
         }
         return {
           handled: true,
           feedback: true,
-          response: '❌ このチャンネルではメッセージを削除できません',
+          response: '❌ 无法在此频道删除消息',
         };
       } catch (err) {
         console.error(`[xangi] Failed to delete message:`, err);
-        return { handled: true, feedback: true, response: '❌ メッセージの削除に失敗しました' };
+        return { handled: true, feedback: true, response: '❌ 删除消息失败' };
       }
     }
 
@@ -1231,7 +1231,7 @@ async function main() {
         return {
           handled: true,
           feedback: true,
-          response: '❌ 編集後のメッセージ内容を指定してください',
+          response: '❌ 请指定编辑后的消息内容',
         };
       }
 
@@ -1240,13 +1240,13 @@ async function main() {
         let targetChannelId: string | undefined;
 
         if (arg === 'last') {
-          // 直前の自分のメッセージを編集
+          // 编辑自己上一条消息
           const currentChannelId = sourceMessage?.channel.id || fallbackChannelId;
           if (!currentChannelId) {
             return {
               handled: true,
               feedback: true,
-              response: '❌ チャンネルが特定できません',
+              response: '❌ 无法确定频道',
             };
           }
           const lastId = lastSentMessageIds.get(currentChannelId);
@@ -1255,12 +1255,12 @@ async function main() {
               handled: true,
               feedback: true,
               response:
-                '❌ 直前のメッセージが見つかりません（このセッションでまだ送信していない可能性があります）',
+                '❌ 未找到上一条消息（本会话中可能尚未发送任何消息）',
             };
           }
           messageId = lastId;
         } else {
-          // メッセージリンクからチャンネルIDとメッセージIDを抽出
+          // 从消息链接中提取频道ID和消息ID
           const linkMatch = arg.match(/discord\.com\/channels\/\d+\/(\d+)\/(\d+)/);
           if (linkMatch) {
             targetChannelId = linkMatch[1];
@@ -1271,12 +1271,12 @@ async function main() {
             return {
               handled: true,
               feedback: true,
-              response: '❌ 無効な形式です。メッセージID、リンク、または last を指定してください',
+              response: '❌ 格式无效。请指定消息ID、链接或 last',
             };
           }
         }
 
-        // リンクからチャンネルIDが取れた場合はそのチャンネルを使う、なければ現在のチャンネル
+        // 如果从链接获取到了频道ID则使用该频道，否则使用当前频道
         let channel;
         if (targetChannelId) {
           channel = await client.channels.fetch(targetChannelId);
@@ -1288,27 +1288,27 @@ async function main() {
 
         if (channel && 'messages' in channel) {
           const msg = await channel.messages.fetch(messageId);
-          // 自分のメッセージのみ編集可能
+          // 只能编辑自己的消息
           if (msg.author.id !== client.user?.id) {
             return {
               handled: true,
               feedback: true,
-              response: '❌ 自分のメッセージのみ編集できます',
+              response: '❌ 只能编辑自己的消息',
             };
           }
           await msg.edit(newContent);
           const editedChannelId = targetChannelId || sourceMessage?.channel.id || fallbackChannelId;
           console.log(`[xangi] Edited message ${messageId} in channel ${editedChannelId}`);
-          return { handled: true, feedback: true, response: '✏️ メッセージを編集しました' };
+          return { handled: true, feedback: true, response: '✏️ 已编辑消息' };
         }
         return {
           handled: true,
           feedback: true,
-          response: '❌ このチャンネルではメッセージを編集できません',
+          response: '❌ 无法在此频道编辑消息',
         };
       } catch (err) {
         console.error(`[xangi] Failed to edit message:`, err);
-        return { handled: true, feedback: true, response: '❌ メッセージの編集に失敗しました' };
+        return { handled: true, feedback: true, response: '❌ 编辑消息失败' };
       }
     }
 
@@ -1316,10 +1316,10 @@ async function main() {
   }
 
   /**
-   * AIの応答から !discord コマンドを検知して実行
-   * コードブロック内のコマンドは無視する
-   * !discord send は複数行メッセージに対応（次の !discord / !schedule コマンド行まで吸収）
-   * feedback: true のコマンド結果はDiscordに送信せずフィードバック配列に収集して返す
+   * 从 AI 的响应中检测并执行 !discord 命令
+   * 忽略代码块内的命令
+   * !discord send 支持多行消息（一直吸收到下一个 !discord / !schedule 命令行）
+   * feedback: true 的命令结果不发送到 Discord，而是收集到反馈数组中返回
    */
   async function handleDiscordCommandsInResponse(
     text: string,
@@ -1334,14 +1334,14 @@ async function main() {
     while (i < lines.length) {
       const line = lines[i];
 
-      // コードブロックの開始/終了を追跡
+      // 跟踪代码块的开始/结束
       if (line.trim().startsWith('```')) {
         inCodeBlock = !inCodeBlock;
         i++;
         continue;
       }
 
-      // コードブロック内はスキップ
+      // 代码块内跳过
       if (inCodeBlock) {
         i++;
         continue;
@@ -1349,13 +1349,13 @@ async function main() {
 
       const trimmed = line.trim();
 
-      // !discord send の複数行対応
+      // !discord send 的多行支持
       const sendMatch = trimmed.match(/^!discord\s+send\s+<#(\d+)>\s*(.*)/);
       if (sendMatch) {
         const firstLineContent = sendMatch[2] ?? '';
 
         if (firstLineContent.trim() === '') {
-          // 本文が空 → 次の !discord / !schedule コマンド行まで吸収（暗黙マルチライン）
+          // 内容为空 → 吸收到下一个 !discord / !schedule 命令行（隐式多行）
           const bodyLines: string[] = [];
           let inBodyCodeBlock = false;
           i++;
@@ -1364,7 +1364,7 @@ async function main() {
             if (bodyLine.trim().startsWith('```')) {
               inBodyCodeBlock = !inBodyCodeBlock;
             }
-            // コードブロック外で次のコマンド行が来たら吸収終了
+            // 代码块外遇到下一个命令行则停止吸收
             if (
               !inBodyCodeBlock &&
               (bodyLine.trim().startsWith('!discord ') || bodyLine.trim().startsWith('!schedule'))
@@ -1401,9 +1401,9 @@ async function main() {
               }
             }
           }
-          continue; // i は既に次のコマンド行を指している
+          continue; // i 已经指向下一个命令行
         } else {
-          // 1行目にテキストあり → 続く行も吸収（次のコマンド行まで）
+          // 第一行有文本 → 继续吸收后续行（直到下一个命令行）
           const bodyLines: string[] = [firstLineContent];
           let inBodyCodeBlock2 = false;
           i++;
@@ -1443,7 +1443,7 @@ async function main() {
         }
       }
 
-      // !discord edit の複数行対応
+      // !discord edit 的多行支持
       const editMatch = trimmed.match(/^!discord\s+edit\s+(\S+)\s*([\s\S]*)/);
       if (editMatch) {
         const editTarget = editMatch[1];
@@ -1488,7 +1488,7 @@ async function main() {
         continue;
       }
 
-      // その他の !discord コマンド（channels, search, history, delete）
+      // 其他 !discord 命令（channels, search, history, delete）
       if (trimmed.startsWith('!discord ')) {
         console.log(`[xangi] Processing discord command from response: ${trimmed.slice(0, 50)}...`);
         const result = await handleDiscordCommand(trimmed, sourceMessage, fallbackChannelId);
@@ -1506,7 +1506,7 @@ async function main() {
         }
       }
 
-      // !schedule コマンド（引数なしでもlist表示、sourceMessage必須）
+      // !schedule 命令（无参数时也显示列表，需要 sourceMessage）
       if (sourceMessage && (trimmed === '!schedule' || trimmed.startsWith('!schedule '))) {
         console.log(
           `[xangi] Processing schedule command from response: ${trimmed.slice(0, 50)}...`
@@ -1520,15 +1520,15 @@ async function main() {
     return feedbackResults;
   }
 
-  // Discord APIエラーでプロセスが落ちないようにハンドリング
+  // 处理 Discord API 错误防止进程崩溃
   client.on('error', (error) => {
     console.error('[xangi] Discord client error:', error.message);
   });
 
-  // チャンネル単位の処理中ロック
+  // 频道级别的处理锁
   const processingChannels = new Set<string>();
 
-  // メッセージ処理
+  // 消息处理
   client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot) return;
 
@@ -1539,7 +1539,7 @@ async function main() {
 
     if (!isMentioned && !isDM && !isAutoReplyChannel) return;
 
-    // 同じチャンネルで処理中なら無視（メンション時は除く）
+    // 同一频道正在处理中则忽略（提及除外）
     if (!isMentioned && processingChannels.has(message.channel.id)) {
       console.log(`[xangi] Skipping message in busy channel: ${message.channel.id}`);
       return;
@@ -1554,12 +1554,12 @@ async function main() {
     }
 
     let prompt = message.content
-      .replace(/<@[!&]?\d+>/g, '') // ユーザーメンションのみ削除（チャンネルメンションは残す）
+      .replace(/<@[!&]?\d+>/g, '') // 只删除用户提及（保留频道提及）
       .replace(/\s+/g, ' ')
       .trim();
 
-    // スキップ設定（返信元追加やリンク展開の前に判定する）
-    // !skip プレフィックスで一時的にスキップモードにできる
+    // 跳过设置（在添加回复源和链接展开之前判断）
+    // 使用 !skip 前缀可以临时进入跳过模式
     let skipPermissions = config.agent.config.skipPermissions ?? false;
 
     if (prompt.startsWith('!skip')) {
@@ -1567,15 +1567,15 @@ async function main() {
       prompt = prompt.replace(/^!skip\s*/, '').trim();
     }
 
-    // !discord コマンドの処理
+    // 处理 !discord 命令
     if (prompt.startsWith('!discord')) {
       const result = await handleDiscordCommand(prompt, message);
       if (result.handled) {
         if (result.feedback && result.response) {
-          // feedback結果はエージェントのコンテキストに注入
-          // → 元のコマンドと結果を合わせてプロンプトに流す
-          prompt = `ユーザーが「${prompt}」を実行しました。以下がその結果です。この情報を踏まえてユーザーに返答してください。\n\n${result.response}`;
-          // processPromptに流す（下に続く）
+          // feedback 结果注入到代理的上下文中
+          // → 将原命令和结果合并后送入提示词
+          prompt = `用户执行了“${prompt}”。以下是结果。请基于此信息回复用户。\n\n${result.response}`;
+          // 继续流到 processPrompt（见下方）
         } else {
           if (result.response && 'send' in message.channel) {
             await message.channel.send(result.response);
@@ -1585,28 +1585,28 @@ async function main() {
       }
     }
 
-    // !schedule コマンドの処理
+    // 处理 !schedule 命令
     if (prompt.startsWith('!schedule')) {
       await handleScheduleMessage(message, prompt, scheduler, config.scheduler);
       return;
     }
 
-    // Discordリンクからメッセージ内容を取得
+    // 从 Discord 链接获取消息内容
     prompt = await fetchDiscordLinkContent(prompt);
 
-    // 返信元メッセージを取得してプロンプトに追加
+    // 获取回复源消息并添加到提示词中
     const replyContent = await fetchReplyContent(message);
     if (replyContent) {
       prompt = replyContent + prompt;
     }
 
-    // チャンネルメンションにID注釈を追加（展開前に実行）
+    // 为频道提及添加ID注释（在展开之前执行）
     prompt = annotateChannelMentions(prompt);
 
-    // チャンネルメンションから最新メッセージを取得
+    // 从频道提及获取最新消息
     prompt = await fetchChannelMessages(prompt);
 
-    // 添付ファイルをダウンロード
+    // 下载附件文件
     const attachmentPaths: string[] = [];
     if (message.attachments.size > 0) {
       for (const [, attachment] of message.attachments) {
@@ -1619,31 +1619,31 @@ async function main() {
       }
     }
 
-    // テキストも添付もない場合はスキップ
+    // 既没有文本也没有附件则跳过
     if (!prompt && attachmentPaths.length === 0) return;
 
-    // 添付ファイル情報をプロンプトに追加
+    // 将附件信息添加到提示词中
     prompt = buildPromptWithAttachments(
-      prompt || '添付ファイルを確認してください',
+      prompt || '请查看附件',
       attachmentPaths
     );
 
     const channelId = message.channel.id;
 
-    // チャンネルトピック（概要）をプロンプトに注入
+    // 将频道主题注入到提示词中
     if (config.discord.injectChannelTopic !== false) {
       const channel = message.channel;
       if ('topic' in channel && channel.topic) {
-        prompt += `\n\n[チャンネルルール（必ず従うこと）]\n${channel.topic}`;
+        prompt += `\n\n[频道规则（必须遵守）]\n${channel.topic}`;
       }
     }
 
-    // タイムスタンプをプロンプトの先頭に注入
+    // 将时间戳注入到提示词开头
     if (config.discord.injectTimestamp !== false) {
       const d = new Date();
       const now = d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
       const day = d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', weekday: 'short' });
-      prompt = `[現在時刻: ${now}(${day})]\n${prompt}`;
+      prompt = `[当前时间: ${now}(${day})]\n${prompt}`;
     }
 
     processingChannels.add(channelId);
@@ -1657,13 +1657,13 @@ async function main() {
         config
       );
 
-      // AIの応答から !discord コマンドを検知して実行
+      // 从 AI 的响应中检测并执行 !discord 命令
       if (result) {
         const feedbackResults = await handleDiscordCommandsInResponse(result, message);
 
-        // フィードバック結果があればエージェントに再注入
+        // 如果有反馈结果则重新注入到代理
         if (feedbackResults.length > 0) {
-          const feedbackPrompt = `あなたが実行したコマンドの結果が返ってきました。この情報を踏まえて、元の会話の文脈に沿ってユーザーに返答してください。\n\n${feedbackResults.join('\n\n')}`;
+          const feedbackPrompt = `你执行的命令结果已返回。请基于此信息，结合原对话上下文回复用户。\n\n${feedbackResults.join('\n\n')}`;
           console.log(`[xangi] Re-injecting ${feedbackResults.length} feedback result(s) to agent`);
           const feedbackResult = await processPrompt(
             message,
@@ -1673,7 +1673,7 @@ async function main() {
             channelId,
             config
           );
-          // 再注入後の応答にもコマンドがあれば処理（ただし再帰は1回のみ）
+          // 如果重新注入后的响应中还有命令则处理（但只递归一次）
           if (feedbackResult) {
             await handleDiscordCommandsInResponse(feedbackResult, message);
           }
@@ -1684,12 +1684,12 @@ async function main() {
     }
   });
 
-  // Discordボットを起動
+  // 启动 Discord 机器人
   if (config.discord.enabled) {
     await client.login(config.discord.token);
     console.log('[xangi] Discord bot started');
 
-    // スケジューラにDiscord送信関数を登録
+    // 向调度器注册 Discord 发送函数
     scheduler.registerSender('discord', async (channelId, msg) => {
       const channel = await client.channels.fetch(channelId);
       if (channel && 'send' in channel) {
@@ -1697,47 +1697,47 @@ async function main() {
       }
     });
 
-    // スケジューラにエージェント実行関数を登録
+    // 向调度器注册代理执行函数
     scheduler.registerAgentRunner('discord', async (prompt, channelId) => {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !('send' in channel)) {
         throw new Error(`Channel not found: ${channelId}`);
       }
 
-      // プロンプト内の !discord send コマンドを先に直接実行
-      // （AIに渡すとコマンドが応答に含まれず実行されないため）
+      // 先直接执行提示词中的 !discord send 命令
+      // （如果传给 AI，命令会包含在响应中而不被执行）
       const promptCommands = extractDiscordSendFromPrompt(prompt);
       for (const cmd of promptCommands.commands) {
         console.log(`[scheduler] Executing discord command from prompt: ${cmd.slice(0, 80)}...`);
         await handleDiscordCommand(cmd, undefined, channelId);
       }
 
-      // !discord send 以外のテキストが残っていればAIに渡す
+      // 如果还有 !discord send 以外的文本则传给 AI
       const remainingPrompt = promptCommands.remaining.trim();
       if (!remainingPrompt) {
-        // コマンドのみのプロンプトだった場合、AIは不要
+        // 提示词中只有命令，不需要 AI
         console.log('[scheduler] Prompt contained only discord commands, skipping agent');
         return promptCommands.commands.map((c) => `✅ ${c.slice(0, 50)}`).join('\n');
       }
 
-      // 処理中メッセージを送信
+      // 发送“思考中”消息
       const thinkingMsg = await (
         channel as {
           send: (content: string) => Promise<{ edit: (content: string) => Promise<unknown> }>;
         }
-      ).send('🤔 考え中...');
+      ).send('🤔 思考中...');
 
       try {
-        // タイムスタンプをプロンプトの先頭に注入
+        // 将时间戳注入到提示词开头
         let agentPrompt = remainingPrompt;
         if (config.discord.injectTimestamp !== false) {
           const d = new Date();
           const now = d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
           const day = d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', weekday: 'short' });
-          agentPrompt = `[現在時刻: ${now}(${day})]\n${agentPrompt}`;
+          agentPrompt = `[当前时间: ${now}(${day})]\n${agentPrompt}`;
         }
 
-        // スケジューラーは毎回新規セッション（stateless）
+        // 调度器每次都使用新会话（无状态）
         const schedAppSessionId = ensureSession(channelId, {
           platform: 'discord',
           scope: 'scheduler',
@@ -1749,15 +1749,15 @@ async function main() {
           appSessionId: schedAppSessionId,
         });
 
-        // スケジューラーのセッションは scheduler スコープで保存
+        // 调度器的会话保存在 scheduler 作用域
         setSession(channelId, newSessionId, 'scheduler');
 
-        // AI応答内の !discord コマンドを処理（sourceMessage なし、channelIdをフォールバック）
+        // 处理 AI 响应中的 !discord 命令（无 sourceMessage，使用 channelId 作为回退）
         const feedbackResults = await handleDiscordCommandsInResponse(result, undefined, channelId);
 
-        // フィードバック結果があればエージェントに再注入
+        // 如果有反馈结果则重新注入到代理
         if (feedbackResults.length > 0) {
-          const feedbackPrompt = `あなたが実行したコマンドの結果が返ってきました。この情報を踏まえて、元の会話の文脈に沿ってユーザーに返答してください。\n\n${feedbackResults.join('\n\n')}`;
+          const feedbackPrompt = `你执行的命令结果已返回。请基于此信息，结合原对话上下文回复用户。\n\n${feedbackResults.join('\n\n')}`;
           console.log(
             `[scheduler] Re-injecting ${feedbackResults.length} feedback result(s) to agent`
           );
@@ -1769,16 +1769,16 @@ async function main() {
             appSessionId: schedAppSessionId,
           });
           setSession(channelId, feedbackRun.sessionId, 'scheduler');
-          // 再注入後の応答にもコマンドがあれば処理
+          // 如果重新注入后的响应中还有命令则处理
           await handleDiscordCommandsInResponse(feedbackRun.result, undefined, channelId);
         }
 
-        // 結果を送信
+        // 发送结果
         const filePaths = extractFilePaths(result);
         const displayText = filePaths.length > 0 ? stripFilePaths(result) : result;
 
-        // === セパレータで明示的に分割（content-digest等で複数投稿を1応答に含める用途）
-        // LLMが前後に空白や余分な改行を入れることがあるため、正規表現で緩くマッチ
+        // === 使用分隔符显式分割（用于在单个响应中包含多个帖子，如 content-digest）
+        // LLM 可能会在前后添加空白或多余换行，使用正则宽松匹配
         const SEPARATOR_REGEX = /\n\s*===\s*\n/;
         const messageParts = SEPARATOR_REGEX.test(displayText)
           ? displayText
@@ -1787,19 +1787,19 @@ async function main() {
               .filter(Boolean)
           : [displayText];
 
-        // 最初のパートは既存のthinkingMsgを編集して送信
+        // 第一个部分编辑现有的 thinkingMsg 发送
         const firstChunks = splitMessage(messageParts[0], DISCORD_SAFE_LENGTH);
         await thinkingMsg.edit(firstChunks[0] || '✅');
-        // 最後に送信したメッセージIDを記録（スケジューラー経由）
+        // 记录最后发送的消息ID（通过调度器）
         if ('id' in thinkingMsg) {
           lastSentMessageIds.set(channelId, (thinkingMsg as { id: string }).id);
         }
         const ch = channel as { send: (content: string) => Promise<unknown> };
-        // 最初のパートの残りチャンク
+        // 第一个部分的剩余块
         for (let i = 1; i < firstChunks.length; i++) {
           await ch.send(firstChunks[i]);
         }
-        // 2つ目以降のパートは新規メッセージとして送信
+        // 第二及以后的部分作为新消息发送
         for (let p = 1; p < messageParts.length; p++) {
           const chunks = splitMessage(messageParts[p], DISCORD_SAFE_LENGTH);
           for (const chunk of chunks) {
@@ -1818,18 +1818,18 @@ async function main() {
         return result;
       } catch (error) {
         if (error instanceof Error && error.message === 'Request cancelled by user') {
-          await thinkingMsg.edit('🛑 タスクを停止しました');
+          await thinkingMsg.edit('🛑 已停止任务');
         } else {
           const errorMsg = error instanceof Error ? error.message : String(error);
           let errorDetail: string;
           if (errorMsg.includes('timed out')) {
-            errorDetail = `⏱️ タイムアウトしました`;
+            errorDetail = `⏱️ 超时了`;
           } else if (errorMsg.includes('Process exited unexpectedly')) {
-            errorDetail = `💥 AIプロセスが予期せず終了しました`;
+            errorDetail = `💥 AI进程意外终止`;
           } else if (errorMsg.includes('Circuit breaker')) {
-            errorDetail = '🔌 AIプロセスが一時停止中です';
+            errorDetail = '🔌 AI进程暂时暂停中';
           } else {
-            errorDetail = `❌ エラー: ${errorMsg.slice(0, 200)}`;
+            errorDetail = `❌ 错误: ${errorMsg.slice(0, 200)}`;
           }
           await thinkingMsg.edit(errorDetail);
         }
@@ -1838,7 +1838,7 @@ async function main() {
     });
   }
 
-  // Slackボットを起動
+  // 启动 Slack 机器人
   if (config.slack.enabled) {
     await startSlackBot({
       config,
@@ -1861,10 +1861,10 @@ async function main() {
     process.exit(1);
   }
 
-  // スケジューラの全ジョブを開始
+  // 启动调度器的所有任务
   scheduler.startAll(config.scheduler);
 
-  // シャットダウン時にスケジューラを停止
+  // 关闭时停止调度器
   const shutdown = () => {
     console.log('[xangi] Shutting down scheduler...');
     scheduler.stopAll();
@@ -1886,7 +1886,7 @@ async function handleAutocomplete(
         skill.name.toLowerCase().includes(focusedValue) ||
         skill.description.toLowerCase().includes(focusedValue)
     )
-    .slice(0, 25) // Discord制限: 最大25件
+    .slice(0, 25) // Discord 限制：最多25条
     .map((skill) => ({
       name: `${skill.name} - ${skill.description.slice(0, 50)}`,
       value: skill.name,
@@ -1908,7 +1908,7 @@ async function handleSkill(
   await interaction.deferReply();
 
   try {
-    const prompt = `スキル「${skillName}」を実行してください。${args ? `引数: ${args}` : ''}`;
+    const prompt = `请执行技能“${skillName}”。${args ? `参数: ${args}` : ''}`;
     const sessionId = getSession(channelId);
     const appSessionId = ensureSession(channelId, { platform: 'discord' });
     const { result, sessionId: newSessionId } = await agentRunner.run(prompt, {
@@ -1926,7 +1926,7 @@ async function handleSkill(
     }
   } catch (error) {
     console.error('[xangi] Error:', error);
-    await interaction.editReply('エラーが発生しました');
+    await interaction.editReply('发生错误');
   }
 }
 
@@ -1943,7 +1943,7 @@ async function handleSkillCommand(
   await interaction.deferReply();
 
   try {
-    const prompt = `スキル「${skillName}」を実行してください。${args ? `引数: ${args}` : ''}`;
+    const prompt = `请执行技能“${skillName}”。${args ? `参数: ${args}` : ''}`;
     const sessionId = getSession(channelId);
     const appSessionId = ensureSession(channelId, { platform: 'discord' });
     const { result, sessionId: newSessionId } = await agentRunner.run(prompt, {
@@ -1961,14 +1961,14 @@ async function handleSkillCommand(
     }
   } catch (error) {
     console.error('[xangi] Error:', error);
-    await interaction.editReply('エラーが発生しました');
+    await interaction.editReply('发生错误');
   }
 }
 
 /**
- * テキストから !discord send コマンドを抽出し、残りのテキストを返す
- * スケジューラプロンプトからコマンドを分離するために使用
- * コードブロック内のコマンドは無視する
+ * 从文本中提取 !discord send 命令，并返回剩余文本
+ * 用于从调度器提示词中分离命令
+ * 忽略代码块内的命令
  */
 function extractDiscordSendFromPrompt(text: string): {
   commands: string[];
@@ -2001,7 +2001,7 @@ function extractDiscordSendFromPrompt(text: string): {
     if (sendMatch) {
       const firstLineContent = sendMatch[2] ?? '';
       if (firstLineContent.trim() === '') {
-        // 暗黙マルチライン: 次のコマンド行まで吸収
+        // 隐式多行：吸收到下一个命令行
         const bodyLines: string[] = [];
         let inBodyCodeBlock = false;
         i++;
@@ -2025,7 +2025,7 @@ function extractDiscordSendFromPrompt(text: string): {
         }
         continue;
       } else {
-        // 1行目にテキストあり → 続く行も吸収
+        // 第一行有文本 → 继续吸收后续行
         const bodyLines2: string[] = [firstLineContent];
         let inBodyCodeBlock2 = false;
         i++;
@@ -2057,9 +2057,9 @@ function extractDiscordSendFromPrompt(text: string): {
 }
 
 /**
- * 表示用テキストからコマンド行を除去する（コードブロック内は残す）
- * SYSTEM_COMMAND:, !discord, !schedule で始まる行を除去
- * !discord send の複数行メッセージ（続く行）も除去
+ * 从显示文本中移除命令行（代码块内的保留）
+ * 移除以 SYSTEM_COMMAND:, !discord, !schedule 开头的行
+ * 也移除 !discord send 的多行消息（后续行）
  */
 function stripCommandsFromDisplay(text: string): string {
   const lines = text.split('\n');
@@ -2085,16 +2085,16 @@ function stripCommandsFromDisplay(text: string): string {
 
     const trimmed = line.trim();
 
-    // SYSTEM_COMMAND: 行を除去
+    // 移除 SYSTEM_COMMAND: 行
     if (trimmed.startsWith('SYSTEM_COMMAND:')) {
       i++;
       continue;
     }
 
-    // !discord send の複数行対応: コマンド行と続く行を除去
+    // !discord send 的多行支持：移除命令行和后续行
     const sendMatch = trimmed.match(/^!discord\s+send\s+<#\d+>\s*(.*)/);
     if (sendMatch) {
-      // 続く行も除去（次のコマンド行まで）
+      // 同时移除后续行（直到下一个命令行）
       i++;
       let inBodyCodeBlock = false;
       while (i < lines.length) {
@@ -2113,13 +2113,13 @@ function stripCommandsFromDisplay(text: string): string {
       continue;
     }
 
-    // その他の !discord コマンド行を除去
+    // 移除其他 !discord 命令行
     if (trimmed.startsWith('!discord ')) {
       i++;
       continue;
     }
 
-    // !schedule コマンド行を除去
+    // 移除 !schedule 命令行
     if (trimmed === '!schedule' || trimmed.startsWith('!schedule ')) {
       i++;
       continue;
@@ -2141,15 +2141,15 @@ async function processPrompt(
   config: ReturnType<typeof loadConfig>
 ): Promise<string | null> {
   let replyMessage: Message | null = null;
-  const toolHistory: string[] = []; // ツール実行履歴（stop時にも参照するため関数スコープ）
-  let lastStreamedText = ''; // エラー時に途中テキストを残すため関数スコープ
+  const toolHistory: string[] = []; // 工具执行历史（用于 stop 时参考，放在函数作用域）
+  let lastStreamedText = ''; // 用于在错误时保留部分文本，放在函数作用域
   try {
-    // チャンネル・ユーザー情報をプロンプトに付与
+    // 将频道和用户信息添加到提示词中
     const channelName =
       'name' in message.channel ? (message.channel as { name: string }).name : null;
-    const userInfo = `[発言者: ${message.author.displayName ?? message.author.username} (ID: ${message.author.id})]`;
+    const userInfo = `[发言者: ${message.author.displayName ?? message.author.username} (ID: ${message.author.id})]`;
     if (channelName) {
-      prompt = `[プラットフォーム: Discord]\n[チャンネル: #${channelName} (ID: ${channelId})]\n${userInfo}\n${prompt}`;
+      prompt = `[平台: Discord]\n[频道: #${channelName} (ID: ${channelId})]\n${userInfo}\n${prompt}`;
     } else {
       prompt = `${userInfo}\n${prompt}`;
     }
@@ -2162,8 +2162,8 @@ async function processPrompt(
     const useStreaming = config.discord.streaming ?? true;
     const showThinking = config.discord.showThinking ?? true;
 
-    // !skip プレフィックスの場合、ワンショットランナーを使用
-    // （persistent-runner はプロセス起動時の権限設定を変えられないため）
+    // 如果是 !skip 前缀，使用一次性运行器
+    // （persistent-runner 无法在进程启动后改变权限设置）
     const defaultSkip = config.agent.config.skipPermissions ?? false;
     const needsSkipRunner = skipPermissions && !defaultSkip;
     const runner: AgentRunner = needsSkipRunner
@@ -2174,10 +2174,10 @@ async function processPrompt(
       console.log(`[xangi] Using one-shot skip runner for channel ${channelId}`);
     }
 
-    // 最初のメッセージを送信
+    // 发送初始消息
     const showButtons = config.discord.showButtons ?? true;
     replyMessage = await message.reply({
-      content: '🤔 考え中.',
+      content: '🤔 思考中.',
       ...(showButtons && { components: [createStopButton()] }),
     });
 
@@ -2185,19 +2185,19 @@ async function processPrompt(
     let newSessionId: string;
 
     if (useStreaming && showThinking && !needsSkipRunner) {
-      // ストリーミング + 思考表示モード（persistent-runner のみ）
+      // 流式 + 思考显示模式（仅 persistent-runner）
       let lastUpdateTime = 0;
       let pendingUpdate = false;
       let firstTextReceived = false;
 
-      // 最初のテキストが届くまで考え中アニメーション
+      // 在收到第一个文本之前显示思考动画
       let dotCount = 1;
       const thinkingInterval = setInterval(() => {
         if (firstTextReceived) return;
         dotCount = (dotCount % 3) + 1;
         const dots = '.'.repeat(dotCount);
         const toolDisplay = toolHistory.length > 0 ? '\n' + toolHistory.join('\n') : '';
-        replyMessage!.edit(`🤔 考え中${dots}${toolDisplay}`).catch(() => {});
+        replyMessage!.edit(`🤔 思考中${dots}${toolDisplay}`).catch(() => {});
       }, 1000);
 
       let streamResult: { result: string; sessionId: string };
@@ -2226,12 +2226,12 @@ async function processPrompt(
               }
             },
             onToolUse: (toolName, toolInput) => {
-              // ツール実行履歴に追加
+              // 添加到工具执行历史
               const inputSummary = formatToolInput(toolName, toolInput);
               toolHistory.push(`🔧 ${toolName}${inputSummary}`);
               if (!firstTextReceived) {
                 const toolDisplay = toolHistory.join('\n');
-                replyMessage!.edit(`🤔 考え中...\n${toolDisplay}`).catch(() => {});
+                replyMessage!.edit(`🤔 思考中...\n${toolDisplay}`).catch(() => {});
               }
             },
           },
@@ -2248,12 +2248,12 @@ async function processPrompt(
       result = streamResult.result;
       newSessionId = streamResult.sessionId;
     } else {
-      // 非ストリーミング or ワンショットskipランナー
+      // 非流式 或 一次性跳过运行器
       let dotCount = 1;
       const thinkingInterval = setInterval(() => {
         dotCount = (dotCount % 3) + 1;
         const dots = '.'.repeat(dotCount);
-        replyMessage!.edit(`🤔 考え中${dots}`).catch(() => {});
+        replyMessage!.edit(`🤔 思考中${dots}`).catch(() => {});
       }, 1000);
 
       try {
@@ -2272,24 +2272,21 @@ async function processPrompt(
 
     setSession(channelId, newSessionId);
     incrementMessageCount(appSessionId);
-    // 最初のメッセージでタイトル自動設定
-    if (!prompt.startsWith('[プラットフォーム:')) {
-      // メタデータ付きプロンプトからユーザーメッセージ部分を抽出
-    }
+    // 第一条消息自动设置标题（略）
     console.log(
       `[xangi] Response length: ${result.length}, session: ${newSessionId.slice(0, 8)}...`
     );
 
-    // ファイルパスを抽出して添付送信
+    // 提取文件路径并发送附件
     const filePaths = extractFilePaths(result);
     const displayText = filePaths.length > 0 ? stripFilePaths(result) : result;
 
-    // SYSTEM_COMMAND: 行と !discord / !schedule コマンド行を表示テキストから除去
-    // コードブロック内のコマンドは残す（表示用テキストなので消さない）
+    // 从显示文本中移除 SYSTEM_COMMAND: 行和 !discord / !schedule 命令行
+    // 代码块内的命令保留（因为是显示用文本，不删除）
     const cleanText = stripCommandsFromDisplay(displayText);
 
-    // === セパレータで明示的に分割（content-digest等で複数投稿を1応答に含める用途）
-    // LLMが前後に空白や余分な改行を入れることがあるため、正規表現で緩くマッチ
+    // === 使用分隔符显式分割（用于在单个响应中包含多个帖子，如 content-digest）
+    // LLM 可能会在前后添加空白或多余换行，使用正则宽松匹配
     const SEPARATOR_REGEX = /\n\s*===\s*\n/;
     const messageParts = SEPARATOR_REGEX.test(cleanText)
       ? cleanText
@@ -2298,13 +2295,13 @@ async function processPrompt(
           .filter(Boolean)
       : [cleanText];
 
-    // 最初のパートは既存のreplyMessageを編集して送信
+    // 第一个部分编辑现有的 replyMessage 发送
     const firstChunks = splitMessage(messageParts[0], DISCORD_SAFE_LENGTH);
     await replyMessage!.edit({
       content: firstChunks[0] || '✅',
       ...(showButtons && { components: [createCompletedButtons()] }),
     });
-    // 最後に送信したメッセージIDを記録
+    // 记录最后发送的消息ID
     if (replyMessage) {
       lastSentMessageIds.set(message.channel.id, replyMessage.id);
     }
@@ -2312,11 +2309,11 @@ async function processPrompt(
       const channel = message.channel as unknown as {
         send: (content: string) => Promise<unknown>;
       };
-      // 最初のパートの残りチャンク
+      // 第一个部分的剩余块
       for (let i = 1; i < firstChunks.length; i++) {
         await channel.send(firstChunks[i]);
       }
-      // 2つ目以降のパートは新規メッセージとして送信
+      // 第二及以后的部分作为新消息发送
       for (let p = 1; p < messageParts.length; p++) {
         const chunks = splitMessage(messageParts[p], DISCORD_SAFE_LENGTH);
         for (const chunk of chunks) {
@@ -2325,7 +2322,7 @@ async function processPrompt(
       }
     }
 
-    // AIの応答から SYSTEM_COMMAND: を検知して実行
+    // 从 AI 的响应中检测并执行 SYSTEM_COMMAND:
     handleSettingsFromResponse(result);
 
     if (filePaths.length > 0 && 'send' in message.channel) {
@@ -2343,7 +2340,7 @@ async function processPrompt(
       }
     }
 
-    // AIの応答を返す（!discord コマンド処理用）
+    // 返回 AI 的响应（用于 !discord 命令处理）
     return result;
   } catch (error) {
     if (error instanceof Error && error.message === 'Request cancelled by user') {
@@ -2352,7 +2349,7 @@ async function processPrompt(
       const prefix = lastStreamedText ? lastStreamedText + '\n\n' : '';
       await replyMessage
         ?.edit({
-          content: `${prefix}🛑 停止しました${toolDisplay}`.slice(0, DISCORD_MAX_LENGTH),
+          content: `${prefix}🛑 已停止${toolDisplay}`.slice(0, DISCORD_MAX_LENGTH),
           components: [],
         })
         .catch(() => {});
@@ -2360,21 +2357,21 @@ async function processPrompt(
     }
     console.error('[xangi] Error:', error);
 
-    // エラーの種類を判別して詳細メッセージを生成
+    // 判断错误类型并生成详细信息
     const errorMsg = error instanceof Error ? error.message : String(error);
     let errorDetail: string;
     if (errorMsg.includes('timed out')) {
-      errorDetail = `⏱️ タイムアウトしました（${Math.round((config.agent.config.timeoutMs ?? 300000) / 1000)}秒）`;
+      errorDetail = `⏱️ 超时了（${Math.round((config.agent.config.timeoutMs ?? 300000) / 1000)}秒）`;
     } else if (errorMsg.includes('Process exited unexpectedly')) {
-      errorDetail = `💥 AIプロセスが予期せず終了しました: ${errorMsg}`;
+      errorDetail = `💥 AI进程意外终止: ${errorMsg}`;
     } else if (errorMsg.includes('Circuit breaker')) {
       errorDetail =
-        '🔌 AIプロセスが連続でクラッシュしたため一時停止中です。しばらくしてから再試行してください';
+        '🔌 AI进程因连续崩溃而暂时暂停。请稍后重试';
     } else {
-      errorDetail = `❌ エラーが発生しました: ${errorMsg.slice(0, 200)}`;
+      errorDetail = `❌ 发生错误: ${errorMsg.slice(0, 200)}`;
     }
 
-    // エラー詳細を表示（途中のテキスト・ツール履歴を残す）
+    // 显示错误详情（保留中间文本和工具历史）
     const toolDisplay = toolHistory.length > 0 ? '\n' + toolHistory.join('\n') : '';
     const prefix = lastStreamedText ? lastStreamedText + '\n\n' : '';
     const errorMessage = `${prefix}${errorDetail}${toolDisplay}`.slice(0, DISCORD_MAX_LENGTH);
@@ -2384,16 +2381,16 @@ async function processPrompt(
       await message.reply(errorMessage).catch(() => {});
     }
 
-    // エラー後にエージェントへ自動フォローアップ（タイムアウト・サーキットブレーカー時は除く）
-    // タイムアウト時のフォローアップは壊れたセッションにさらに負荷をかけるだけで、
-    // 再びタイムアウト→Circuit breaker発動→チャンネルが長時間ロックされる原因になる
+    // 错误后向代理自动发送跟进（超时和断路器时除外）
+    // 超时后的跟进只会给损坏的会话增加更多负担，
+    // 导致再次超时→断路器触发→频道长时间锁定
     if (!errorMsg.includes('Circuit breaker') && !errorMsg.includes('timed out')) {
       try {
         console.log('[xangi] Sending error follow-up to agent');
         const sessionId = getSession(channelId);
         if (sessionId) {
           const followUpPrompt =
-            '先ほどの処理がエラー（タイムアウト等）で中断されました。途中まで行った作業内容と現在の状況を簡潔に報告してください。';
+            '刚才的处理因错误（超时等）中断了。请简要报告已进行的作业内容和当前状态。';
           const followUpAppId = getActiveSessionId(channelId);
           const followUpResult = await agentRunner.run(followUpPrompt, {
             skipPermissions,
@@ -2409,7 +2406,7 @@ async function processPrompt(
                 message.channel as unknown as {
                   send: (content: string) => Promise<unknown>;
                 }
-              ).send(`📋 **エラー前の作業報告:**\n${followUpText}`);
+              ).send(`📋 **错误前的作业报告:**\n${followUpText}`);
             }
           }
         }
@@ -2420,7 +2417,7 @@ async function processPrompt(
 
     return null;
   } finally {
-    // 👀 リアクションを削除
+    // 删除 👀 反应
     await message.reactions.cache
       .find((r) => r.emoji.name === '👀')
       ?.users.remove(message.client.user?.id)
@@ -2431,8 +2428,8 @@ async function processPrompt(
 }
 
 /**
- * AIの応答から SYSTEM_COMMAND: を検知して実行
- * 形式: SYSTEM_COMMAND:restart / SYSTEM_COMMAND:set key=value
+ * 从 AI 的响应中检测并执行 SYSTEM_COMMAND:
+ * 格式: SYSTEM_COMMAND:restart / SYSTEM_COMMAND:set key=value
  */
 function handleSettingsFromResponse(text: string): void {
   const commands = text.match(/^SYSTEM_COMMAND:(.+)$/gm);
@@ -2464,7 +2461,7 @@ function handleSettingsFromResponse(text: string): void {
   }
 }
 
-// ─── Schedule Handlers ──────────────────────────────────────────────
+// ─── 调度处理程序 ──────────────────────────────────────────────
 
 async function handleScheduleCommand(
   interaction: ChatInputCommandInteraction,
@@ -2481,13 +2478,13 @@ async function handleScheduleCommand(
       if (!parsed) {
         await interaction.reply({
           content:
-            '❌ 入力を解析できませんでした\n\n' +
-            '**対応フォーマット:**\n' +
-            '• `30分後 メッセージ` — 相対時間\n' +
-            '• `15:00 メッセージ` — 時刻指定\n' +
-            '• `毎日 9:00 メッセージ` — 毎日定時\n' +
-            '• `毎週月曜 10:00 メッセージ` — 週次\n' +
-            '• `cron 0 9 * * * メッセージ` — cron式',
+            '❌ 无法解析输入\n\n' +
+            '**支持格式:**\n' +
+            '• `30分钟后 消息` — 相对时间\n' +
+            '• `15:00 消息` — 指定时间\n' +
+            '• `每天 9:00 消息` — 每天定时\n' +
+            '• `每周一 10:00 消息` — 每周\n' +
+            '• `cron 0 9 * * * 消息` — cron表达式',
           ephemeral: true,
         });
         return;
@@ -2509,11 +2506,11 @@ async function handleScheduleCommand(
         });
 
         await interaction.reply(
-          `✅ スケジュールを追加しました\n\n${typeLabel}\n📝 ${schedule.message}\n🆔 \`${schedule.id}\``
+          `✅ 已添加调度\n\n${typeLabel}\n📝 ${schedule.message}\n🆔 \`${schedule.id}\``
         );
       } catch (error) {
         await interaction.reply({
-          content: `❌ ${error instanceof Error ? error.message : 'エラーが発生しました'}`,
+          content: `❌ ${error instanceof Error ? error.message : '发生错误'}`,
           ephemeral: true,
         });
       }
@@ -2521,7 +2518,7 @@ async function handleScheduleCommand(
     }
 
     case 'list': {
-      // 全スケジュールを表示（チャンネルでフィルタしない）
+      // 显示所有调度（不按频道过滤）
       const schedules = scheduler.list();
       const content = formatScheduleList(schedules, schedulerConfig);
       if (content.length <= DISCORD_MAX_LENGTH) {
@@ -2540,7 +2537,7 @@ async function handleScheduleCommand(
       const id = interaction.options.getString('id', true);
       const removed = scheduler.remove(id);
       await interaction.reply(
-        removed ? `🗑️ スケジュール \`${id}\` を削除しました` : `❌ ID \`${id}\` が見つかりません`
+        removed ? `🗑️ 已删除调度 \`${id}\`` : `❌ 未找到 ID \`${id}\``
       );
       return;
     }
@@ -2549,10 +2546,10 @@ async function handleScheduleCommand(
       const id = interaction.options.getString('id', true);
       const schedule = scheduler.toggle(id);
       if (schedule) {
-        const status = schedule.enabled ? '✅ 有効' : '⏸️ 無効';
-        await interaction.reply(`${status} に切り替えました: \`${id}\``);
+        const status = schedule.enabled ? '✅ 已启用' : '⏸️ 已禁用';
+        await interaction.reply(`${status}: \`${id}\``);
       } else {
-        await interaction.reply(`❌ ID \`${id}\` が見つかりません`);
+        await interaction.reply(`❌ 未找到 ID \`${id}\``);
       }
       return;
     }
@@ -2568,7 +2565,7 @@ async function handleScheduleMessage(
   const args = prompt.replace(/^!schedule\s*/, '').trim();
   const channelId = message.channel.id;
 
-  // !schedule (引数なし) or !schedule list → 一覧（全件表示）
+  // !schedule (无参数) or !schedule list → 列表（显示全部）
   if (!args || args === 'list') {
     const schedules = scheduler.list();
     const content = formatScheduleList(schedules, schedulerConfig);
@@ -2583,11 +2580,11 @@ async function handleScheduleMessage(
     return;
   }
 
-  // !schedule remove <id|番号> [番号2] [番号3] ...
+  // !schedule remove <id|编号> [编号2] [编号3] ...
   if (args.startsWith('remove ') || args.startsWith('delete ') || args.startsWith('rm ')) {
     const parts = args.split(/\s+/).slice(1).filter(Boolean);
     if (parts.length === 0) {
-      await message.reply('使い方: `!schedule remove <ID または 番号> [番号2] ...`');
+      await message.reply('用法: `!schedule remove <ID 或 编号> [编号2] ...`');
       return;
     }
 
@@ -2595,13 +2592,13 @@ async function handleScheduleMessage(
     const deletedIds: string[] = [];
     const errors: string[] = [];
 
-    // 番号を大きい順にソート（削除時のずれを防ぐ）
+    // 按编号从大到小排序（防止删除时的偏移问题）
     const targets = parts
       .map((p) => {
         const num = parseInt(p, 10);
         if (!isNaN(num) && num > 0 && !p.startsWith('sch_')) {
           if (num > schedules.length) {
-            errors.push(`番号 ${num} は範囲外`);
+            errors.push(`编号 ${num} 超出范围`);
             return null;
           }
           return { index: num, id: schedules[num - 1].id };
@@ -2609,26 +2606,26 @@ async function handleScheduleMessage(
         return { index: 0, id: p };
       })
       .filter((t): t is { index: number; id: string } => t !== null)
-      .sort((a, b) => b.index - a.index); // 大きい番号から削除
+      .sort((a, b) => b.index - a.index); // 从大到小删除
 
     for (const target of targets) {
       if (scheduler.remove(target.id)) {
         deletedIds.push(target.id);
       } else {
-        errors.push(`ID ${target.id} が見つからない`);
+        errors.push(`未找到 ID ${target.id}`);
       }
     }
 
     const remaining = scheduler.list();
     let response = '';
     if (deletedIds.length > 0) {
-      response += `✅ ${deletedIds.length}件削除しました\n\n`;
+      response += `✅ 已删除 ${deletedIds.length} 条\n\n`;
     }
     if (errors.length > 0) {
-      response += `⚠️ エラー: ${errors.join(', ')}\n\n`;
+      response += `⚠️ 错误: ${errors.join(', ')}\n\n`;
     }
     response += formatScheduleList(remaining, schedulerConfig);
-    // 2000文字制限対応
+    // 2000字符限制处理
     if (response.length <= DISCORD_MAX_LENGTH) {
       await message.reply(response.replaceAll(SCHEDULE_SEPARATOR, ''));
     } else {
@@ -2640,11 +2637,11 @@ async function handleScheduleMessage(
     return;
   }
 
-  // !schedule toggle <id|番号>
+  // !schedule toggle <id|编号>
   if (args.startsWith('toggle ')) {
     const idOrIndex = args.split(/\s+/)[1];
     if (!idOrIndex) {
-      await message.reply('使い方: `!schedule toggle <ID または 番号>`');
+      await message.reply('用法: `!schedule toggle <ID 或 编号>`');
       return;
     }
 
@@ -2653,7 +2650,7 @@ async function handleScheduleMessage(
     if (!isNaN(indexNum) && indexNum > 0 && !idOrIndex.startsWith('sch_')) {
       const schedules = scheduler.list(channelId);
       if (indexNum > schedules.length) {
-        await message.reply(`❌ 番号 ${indexNum} は範囲外です（1〜${schedules.length}）`);
+        await message.reply(`❌ 编号 ${indexNum} 超出范围（1〜${schedules.length}）`);
         return;
       }
       targetId = schedules[indexNum - 1].id;
@@ -2661,31 +2658,31 @@ async function handleScheduleMessage(
 
     const schedule = scheduler.toggle(targetId);
     if (schedule) {
-      const status = schedule.enabled ? '✅ 有効化' : '⏸️ 無効化';
+      const status = schedule.enabled ? '✅ 已启用' : '⏸️ 已禁用';
       const all = scheduler.list(channelId);
       const listContent = formatScheduleList(all, schedulerConfig).replaceAll(
         SCHEDULE_SEPARATOR,
         ''
       );
-      await message.reply(`${status}しました: ${targetId}\n\n${listContent}`);
+      await message.reply(`${status}: ${targetId}\n\n${listContent}`);
     } else {
-      await message.reply(`❌ ID \`${targetId}\` が見つかりません`);
+      await message.reply(`❌ 未找到 ID \`${targetId}\``);
     }
     return;
   }
 
-  // !schedule add <input> or !schedule <input> (addなしでも追加)
+  // !schedule add <input> or !schedule <input> (无 add 也可以添加)
   const input = args.startsWith('add ') ? args.replace(/^add\s+/, '') : args;
   const parsed = parseScheduleInput(input);
   if (!parsed) {
     await message.reply(
-      '❌ 入力を解析できませんでした\n\n' +
-        '**対応フォーマット:**\n' +
-        '• `!schedule 30分後 メッセージ`\n' +
-        '• `!schedule 15:00 メッセージ`\n' +
-        '• `!schedule 毎日 9:00 メッセージ`\n' +
-        '• `!schedule 毎週月曜 10:00 メッセージ`\n' +
-        '• `!schedule cron 0 9 * * * メッセージ`\n' +
+      '❌ 无法解析输入\n\n' +
+        '**支持格式:**\n' +
+        '• `!schedule 30分钟后 消息`\n' +
+        '• `!schedule 15:00 消息`\n' +
+        '• `!schedule 每天 9:00 消息`\n' +
+        '• `!schedule 每周一 10:00 消息`\n' +
+        '• `!schedule cron 0 9 * * * 消息`\n' +
         '• `!schedule list` / `!schedule remove <ID>`'
     );
     return;
@@ -2707,15 +2704,15 @@ async function handleScheduleMessage(
     });
 
     await message.reply(
-      `✅ スケジュールを追加しました\n\n${typeLabel}\n📝 ${schedule.message}\n🆔 \`${schedule.id}\``
+      `✅ 已添加调度\n\n${typeLabel}\n📝 ${schedule.message}\n🆔 \`${schedule.id}\``
     );
   } catch (error) {
-    await message.reply(`❌ ${error instanceof Error ? error.message : 'エラーが発生しました'}`);
+    await message.reply(`❌ ${error instanceof Error ? error.message : '发生错误'}`);
   }
 }
 
 /**
- * AI応答内の !schedule コマンドを実行
+ * 执行 AI 响应中的 !schedule 命令
  */
 async function executeScheduleFromResponse(
   text: string,
@@ -2727,7 +2724,7 @@ async function executeScheduleFromResponse(
   const channelId = sourceMessage.channel.id;
   const channel = sourceMessage.channel;
 
-  // list コマンド（全件表示）
+  // list 命令（显示全部）
   if (!args || args === 'list') {
     const schedules = scheduler.list();
     const content = formatScheduleList(schedules, schedulerConfig);
@@ -2735,7 +2732,7 @@ async function executeScheduleFromResponse(
       const sendFn = (channel as { send: (content: string) => Promise<unknown> }).send.bind(
         channel
       );
-      // 2000文字制限対応: 分割送信
+      // 2000字符限制处理：分割发送
       if (content.length <= DISCORD_MAX_LENGTH) {
         await sendFn(content.replaceAll(SCHEDULE_SEPARATOR, ''));
       } else {
@@ -2748,7 +2745,7 @@ async function executeScheduleFromResponse(
     return;
   }
 
-  // remove コマンド（複数対応）
+  // remove 命令（支持多个）
   if (args.startsWith('remove ') || args.startsWith('delete ') || args.startsWith('rm ')) {
     const parts = args.split(/\s+/).slice(1).filter(Boolean);
     if (parts.length === 0) return;
@@ -2756,7 +2753,7 @@ async function executeScheduleFromResponse(
     const schedules = scheduler.list();
     const deletedIds: string[] = [];
 
-    // 番号を大きい順にソート（削除時のずれを防ぐ）
+    // 按编号从大到小排序（防止删除时的偏移问题）
     const targets = parts
       .map((p) => {
         const num = parseInt(p, 10);
@@ -2777,7 +2774,7 @@ async function executeScheduleFromResponse(
 
     if ('send' in channel && deletedIds.length > 0) {
       const remaining = scheduler.list();
-      const content = `✅ ${deletedIds.length}件削除しました\n\n${formatScheduleList(remaining, schedulerConfig)}`;
+      const content = `✅ 已删除 ${deletedIds.length} 条\n\n${formatScheduleList(remaining, schedulerConfig)}`;
       const sendFn = (channel as { send: (content: string) => Promise<unknown> }).send.bind(
         channel
       );
@@ -2793,7 +2790,7 @@ async function executeScheduleFromResponse(
     return;
   }
 
-  // toggle コマンド
+  // toggle 命令
   if (args.startsWith('toggle ')) {
     const idOrIndex = args.split(/\s+/)[1];
     if (!idOrIndex) return;
@@ -2805,7 +2802,7 @@ async function executeScheduleFromResponse(
       if (indexNum > schedules.length) {
         if ('send' in channel) {
           await (channel as { send: (content: string) => Promise<unknown> }).send(
-            `❌ 番号 ${indexNum} は範囲外です（1〜${schedules.length}）`
+            `❌ 编号 ${indexNum} 超出范围（1〜${schedules.length}）`
           );
         }
         return;
@@ -2816,18 +2813,18 @@ async function executeScheduleFromResponse(
     const schedule = scheduler.toggle(targetId);
     if ('send' in channel) {
       if (schedule) {
-        const status = schedule.enabled ? '✅ 有効化' : '⏸️ 無効化';
+        const status = schedule.enabled ? '✅ 已启用' : '⏸️ 已禁用';
         const all = scheduler.list(channelId);
         const listContent = formatScheduleList(all, schedulerConfig).replaceAll(
           SCHEDULE_SEPARATOR,
           ''
         );
         await (channel as { send: (content: string) => Promise<unknown> }).send(
-          `${status}しました: ${targetId}\n\n${listContent}`
+          `${status}: ${targetId}\n\n${listContent}`
         );
       } else {
         await (channel as { send: (content: string) => Promise<unknown> }).send(
-          `❌ ID \`${targetId}\` が見つかりません`
+          `❌ 未找到 ID \`${targetId}\``
         );
       }
     }
@@ -2858,7 +2855,7 @@ async function executeScheduleFromResponse(
 
     if ('send' in channel) {
       await (channel as { send: (content: string) => Promise<unknown> }).send(
-        `✅ スケジュールを追加しました\n\n${typeLabel}\n📝 ${schedule.message}\n🆔 \`${schedule.id}\``
+        `✅ 已添加调度\n\n${typeLabel}\n📝 ${schedule.message}\n🆔 \`${schedule.id}\``
       );
     }
   } catch (error) {
