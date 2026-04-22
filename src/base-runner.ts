@@ -9,7 +9,7 @@ import {
 import type { ChatPlatform } from './prompts/index.js';
 
 /**
- * ランナー共通の設定
+ * 运行器通用设置
  */
 export interface BaseRunnerOptions {
   model?: string;
@@ -18,11 +18,11 @@ export interface BaseRunnerOptions {
   skipPermissions?: boolean;
 }
 
-// プロンプトを再エクスポート（既存のimportを壊さないため）
+// 重新导出提示词（为了不破坏现有的 import）
 export { CHAT_SYSTEM_PROMPT_RESUME, CHAT_SYSTEM_PROMPT_PERSISTENT };
 
 /**
- * 完全なシステムプロンプトを生成（resume型ランナー用）
+ * 生成完整的系统提示词（用于 resume 型运行器）
  */
 export function buildSystemPrompt(platform?: ChatPlatform): string {
   const systemPrompt = buildChatSystemResume(platform);
@@ -31,7 +31,7 @@ export function buildSystemPrompt(platform?: ChatPlatform): string {
 }
 
 /**
- * 完全なシステムプロンプトを生成（常駐プロセス用）
+ * 生成完整的系统提示词（用于常驻进程）
  */
 export function buildPersistentSystemPrompt(platform?: ChatPlatform): string {
   const systemPrompt = buildChatSystemPersistent(platform);
@@ -39,8 +39,8 @@ export function buildPersistentSystemPrompt(platform?: ChatPlatform): string {
   return systemPrompt + '\n\n## XANGI_COMMANDS\n\n' + commands;
 }
 
-// XANGI_COMMANDSを再エクスポート（local-llm runner等から使う）
+// 重新导出 XANGI_COMMANDS（供 local-llm runner 等使用）
 export { XANGI_COMMANDS };
 
-// safe-env.ts から再エクスポート（既存のimportを壊さないため）
+// 从 safe-env.ts 重新导出（为了不破坏现有的 import）
 export { getSafeEnv } from './safe-env.js';
