@@ -8,9 +8,9 @@ import { RunnerManager } from './runner-manager.js';
 export interface RunOptions {
   skipPermissions?: boolean;
   sessionId?: string;
-  channelId?: string; // プロセス管理用
-  appSessionId?: string; // xangi側セッションID（ログ用）
-  effort?: EffortLevel; // Claude Code の --effort オプション
+  channelId?: string; // 用于进程管理
+  appSessionId?: string; // xangi 侧会话 ID（用于日志）
+  effort?: EffortLevel; // Claude Code 的 --effort 选项
 }
 
 export interface RunResult {
@@ -26,19 +26,19 @@ export interface StreamCallbacks {
 }
 
 /**
- * AIエージェントランナーの統一インターフェース
+ * AI 代理运行器的统一接口
  */
 export interface AgentRunner {
   run(prompt: string, options?: RunOptions): Promise<RunResult>;
   runStream(prompt: string, callbacks: StreamCallbacks, options?: RunOptions): Promise<RunResult>;
-  /** 現在処理中のリクエストをキャンセル */
+  /** 取消当前正在处理的请求 */
   cancel?(channelId?: string): boolean;
-  /** 指定チャンネルのランナーを完全に破棄（/new用） */
+  /** 完全销毁指定频道的运行器（用于 /new） */
   destroy?(channelId: string): boolean;
 }
 
 /**
- * 設定に基づいてAgentRunnerを作成
+ * 根据配置创建 AgentRunner
  */
 export function createAgentRunner(
   backend: AgentBackend,
@@ -47,7 +47,7 @@ export function createAgentRunner(
 ): AgentRunner {
   switch (backend) {
     case 'claude-code':
-      // persistent モードなら RunnerManager を使用（複数チャンネル同時処理）
+      // persistent 模式使用 RunnerManager（多频道同时处理）
       if (config.persistent) {
         console.log('[agent-runner] Using RunnerManager (multi-channel high-speed mode)');
         return new RunnerManager(config, {
@@ -69,27 +69,27 @@ export function createAgentRunner(
 }
 
 /**
- * ストリーミング中に累積したテキストと、最終 result テキストをマージする。
+ * 合并流式传输中累积的文本和最终的 result 文本。
  *
- * Claude Code CLI はツール呼び出しの合間にテキストを出力するが、
- * 最終的な result フィールドには最後のテキストブロックしか含まれない。
- * この関数は累積テキスト（streamed）を基本とし、result にしかないテキストがあれば追加する。
+ * Claude Code CLI 在工具调用之间会输出文本，
+ * 但最终的 result 字段只包含最后一个文本块。
+ * 此函数以累积文本（streamed）为基础，如果 result 中有额外文本则添加。
  */
 export function mergeTexts(streamed: string, result: string): string {
   if (!result) return streamed;
   if (!streamed) return result;
 
-  // result が streamed の末尾に含まれていれば重複 → streamed をそのまま返す
+  // 如果 result 包含在 streamed 末尾，说明重复 → 直接返回 streamed
   if (streamed.endsWith(result)) return streamed;
 
-  // streamed が result に完全に含まれているなら result を優先
+  // 如果 streamed 完全包含在 result 中，则优先使用 result
   if (result.endsWith(streamed)) return result;
 
-  // どちらにも含まれない → 区切って結合
+  // 都不包含 → 用分隔符连接
   return `${streamed}\n${result}`;
 }
 
-/** 不正なサロゲートペア（片方だけの孤立サロゲート）を除去する */
+/** 移除无效的代理对（孤立的代理项） */
 export function sanitizeSurrogates(text: string): string {
   return text.replace(
     /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
@@ -98,7 +98,7 @@ export function sanitizeSurrogates(text: string): string {
 }
 
 /**
- * バックエンド名を表示用に変換
+ * 将后端名称转换为显示用名称
  */
 export function getBackendDisplayName(backend: AgentBackend): string {
   switch (backend) {
