@@ -10,30 +10,30 @@ import {
 } from 'fs';
 import { dirname, join } from 'path';
 import cron from 'node-cron';
-/** スケジュール一覧の項目間区切り（splitMessage用） */
+/** 调度列表项之间的分隔符（用于 splitMessage） */
 export const SCHEDULE_SEPARATOR = '{{SPLIT}}';
 
-// ─── Types ───────────────────────────────────────────────────────────
+// ─── 类型定义 ───────────────────────────────────────────────────────────
 export type ScheduleType = 'cron' | 'once' | 'startup';
 export type Platform = 'discord' | 'slack';
 export interface Schedule {
   id: string;
   type: ScheduleType;
-  /** cron式（type='cron'の場合）*/
+  /** cron 表达式（type='cron' 时）*/
   expression?: string;
-  /** 実行時刻 ISO8601（type='once'の場合）*/
+  /** 执行时间 ISO8601（type='once' 时）*/
   runAt?: string;
-  /** 送信メッセージ or エージェントへのプロンプト */
+  /** 发送的消息或给 Agent 的提示词 */
   message: string;
-  /** 送信先チャンネルID */
+  /** 目标频道 ID */
   channelId: string;
-  /** プラットフォーム */
+  /** 平台 */
   platform: Platform;
-  /** 作成日時 ISO8601 */
+  /** 创建时间 ISO8601 */
   createdAt: string;
-  /** 有効/無効 */
+  /** 启用/禁用 */
   enabled: boolean;
-  /** ラベル（任意） */
+  /** 标签（可选）*/
   label?: string;
 }
 export interface SendMessageFn {
@@ -42,7 +42,7 @@ export interface SendMessageFn {
 export interface AgentRunFn {
   (prompt: string, channelId: string): Promise<string>;
 }
-// ─── Scheduler ───────────────────────────────────────────────────────
+// ─── 调度器 ───────────────────────────────────────────────────────
 export class Scheduler {
   private schedules: Schedule[] = [];
   private cronJobs = new Map<string, cron.ScheduledTask>();
@@ -69,47 +69,47 @@ export class Scheduler {
       console.log(message);
     }
   }
-  // ─── Sender Registration ──────────────────────────────────────────
+  // ─── 发送器注册 ──────────────────────────────────────────
   /**
-   * プラットフォームのメッセージ送信関数を登録
+   * 注册平台的消息发送函数
    */
   registerSender(platform: Platform, sender: SendMessageFn): void {
     this.senders.set(platform, sender);
   }
   /**
-   * プラットフォームのエージェント実行関数を登録
+   * 注册平台的 Agent 执行函数
    */
   registerAgentRunner(platform: Platform, runner: AgentRunFn): void {
     this.agentRunners.set(platform, runner);
   }
-  // ─── CRUD ─────────────────────────────────────────────────────────
+  // ─── CRUD 操作 ─────────────────────────────────────────────────────────
   /**
-   * スケジュールを追加
+   * 添加调度任务
    */
   add(schedule: Omit<Schedule, 'id' | 'createdAt' | 'enabled'>): Schedule {
-    // Validate
+    // 验证
     if (schedule.type === 'cron') {
       if (!schedule.expression || !cron.validate(schedule.expression)) {
         throw new Error(
-          `Invalid cron expression: ${schedule.expression}\n` +
-            '例: "0 9 * * *"（毎日9時）, "*/30 * * * *"（30分毎）'
+          `无效的 cron 表达式: ${schedule.expression}\n` +
+            '示例: "0 9 * * *"（每天9点）, "*/30 * * * *"（每30分钟）'
         );
       }
     } else if (schedule.type === 'once') {
       if (!schedule.runAt) {
-        throw new Error('runAt is required for one-time schedule');
+        throw new Error('一次性调度任务需要 runAt 参数');
       }
       const runTime = new Date(schedule.runAt).getTime();
       if (isNaN(runTime)) {
-        throw new Error(`Invalid date: ${schedule.runAt}`);
+        throw new Error(`无效的日期: ${schedule.runAt}`);
       }
       if (runTime <= Date.now()) {
-        throw new Error('runAt must be in the future');
+        throw new Error('runAt 必须是未来的时间');
       }
     } else if (schedule.type === 'startup') {
-      // startup type needs no additional validation
+      // startup 类型无需额外验证
     } else {
-      throw new Error(`Unknown schedule type: ${schedule.type}`);
+      throw new Error(`未知的调度类型: ${schedule.type}`);
     }
     const newSchedule: Schedule = {
       ...schedule,
@@ -125,7 +125,7 @@ export class Scheduler {
     return newSchedule;
   }
   /**
-   * スケジュールを削除
+   * 删除调度任务
    */
   remove(id: string): boolean {
     const index = this.schedules.findIndex((s) => s.id === id);
@@ -136,7 +136,7 @@ export class Scheduler {
     return true;
   }
   /**
-   * スケジュール一覧を取得
+   * 获取调度任务列表
    */
   list(channelId?: string, platform?: Platform): Schedule[] {
     let result = this.schedules;
@@ -149,13 +149,13 @@ export class Scheduler {
     return result;
   }
   /**
-   * スケジュールを取得
+   * 获取单个调度任务
    */
   get(id: string): Schedule | undefined {
     return this.schedules.find((s) => s.id === id);
   }
   /**
-   * スケジュールを有効/無効に切り替え
+   * 切换调度任务的启用/禁用状态
    */
   toggle(id: string): Schedule | undefined {
     const schedule = this.schedules.find((s) => s.id === id);
@@ -171,9 +171,9 @@ export class Scheduler {
     }
     return schedule;
   }
-  // ─── Job Management ───────────────────────────────────────────────
+  // ─── 任务管理 ───────────────────────────────────────────────
   /**
-   * 全スケジュールのジョブを開始（起動時に呼ぶ）
+   * 启动所有调度任务（启动时调用）
    */
   startAll(options?: { enabled?: boolean; startupEnabled?: boolean }): void {
     const schedulerEnabled = options?.enabled ?? true;
@@ -181,7 +181,7 @@ export class Scheduler {
 
     if (!schedulerEnabled) {
       this.disabled = true;
-      this.log('[scheduler] Scheduler is disabled (SCHEDULER_ENABLED=false), skipping all jobs');
+      this.log('[scheduler] 调度器已禁用 (SCHEDULER_ENABLED=false)，跳过所有任务');
       this.startWatching();
       return;
     }
@@ -198,23 +198,23 @@ export class Scheduler {
     }
     this.startWatching();
     const regularJobs = this.schedules.filter((s) => s.enabled && s.type !== 'startup').length;
-    this.log(`[scheduler] Started ${regularJobs} jobs, ${startupTasks.length} startup tasks`);
+    this.log(`[scheduler] 已启动 ${regularJobs} 个定时任务，${startupTasks.length} 个启动任务`);
 
     if (!startupEnabled) {
-      this.log('[scheduler] Startup tasks disabled (STARTUP_ENABLED=false), skipping');
+      this.log('[scheduler] 启动任务已禁用 (STARTUP_ENABLED=false)，跳过');
       return;
     }
 
-    // Execute startup tasks
+    // 执行启动任务
     for (const task of startupTasks) {
-      this.log(`[scheduler] Executing startup task: ${task.id}`);
+      this.log(`[scheduler] 执行启动任务: ${task.id}`);
       this.executeJob(task).catch((err) => {
-        console.error(`[scheduler] Startup task failed: ${task.id}`, err);
+        console.error(`[scheduler] 启动任务失败: ${task.id}`, err);
       });
     }
   }
   /**
-   * 全ジョブを停止（シャットダウン時に呼ぶ）
+   * 停止所有任务（关闭时调用）
    */
   stopAll(): void {
     this.stopWatching();
@@ -225,21 +225,21 @@ export class Scheduler {
       this.stopJob(id);
     }
   }
-  // ─── File Watching ────────────────────────────────────────────────
+  // ─── 文件监听 ────────────────────────────────────────────────
   /**
-   * ファイル変更を監視して自動リロード（CLI等からの外部変更を検知）
+   * 监听文件变化并自动重新加载（检测来自 CLI 等的外部修改）
    */
   private startWatching(): void {
     if (this.watching) return;
     this.watching = true;
     watchFile(this.filePath, { interval: 2000 }, () => {
       const now = Date.now();
-      // 自分自身の保存による変更は無視（2秒以内）
+      // 忽略自身保存导致的修改（2秒内）
       if (now - this.lastSaveTime < 2000) return;
-      // 連続イベント発火を防ぐ（debounce: 1秒以内の重複は無視）
+      // 防止连续事件触发（防抖：1秒内的重复事件忽略）
       if (now - this.lastReloadTime < 1000) return;
       this.lastReloadTime = now;
-      this.log('[scheduler] File change detected, reloading...');
+      this.log('[scheduler] 检测到文件变化，正在重新加载...');
       this.reload();
     });
   }
@@ -249,19 +249,19 @@ export class Scheduler {
     this.watching = false;
   }
   /**
-   * ファイルから再読み込みしてジョブを再起動
+   * 从文件重新加载并重启任务
    */
   private reload(): void {
-    // 既存ジョブを全停止
+    // 停止所有现有任务
     for (const [id] of this.cronJobs) {
       this.stopJob(id);
     }
     for (const [id] of this.timers) {
       this.stopJob(id);
     }
-    // 再読み込み
+    // 重新加载
     this.load();
-    // 有効なジョブを再開（スケジューラ無効時はスキップ）
+    // 重启启用的任务（调度器禁用时跳过）
     if (!this.disabled) {
       for (const schedule of this.schedules) {
         if (schedule.enabled) {
@@ -269,10 +269,10 @@ export class Scheduler {
         }
       }
     }
-    this.log(`[scheduler] Reloaded: ${this.schedules.filter((s) => s.enabled).length} active jobs`);
+    this.log(`[scheduler] 已重新加载: ${this.schedules.filter((s) => s.enabled).length} 个活跃任务`);
   }
   private startJob(schedule: Schedule): void {
-    // 既に動いていたら止める
+    // 如果已在运行，先停止
     this.stopJob(schedule.id);
     if (schedule.type === 'cron' && schedule.expression) {
       const task = cron.schedule(
@@ -284,26 +284,26 @@ export class Scheduler {
       );
       this.cronJobs.set(schedule.id, task);
       this.log(
-        `[scheduler] Cron job started: ${schedule.id} (${schedule.expression}) → ${schedule.channelId}`
+        `[scheduler] Cron 任务已启动: ${schedule.id} (${schedule.expression}) → ${schedule.channelId}`
       );
     } else if (schedule.type === 'once' && schedule.runAt) {
       const delay = new Date(schedule.runAt).getTime() - Date.now();
       if (delay <= 0) {
-        // 既に過ぎている → 即実行して削除
-        this.log(`[scheduler] One-time job ${schedule.id} is past due, executing now`);
+        // 已过期 → 立即执行并删除
+        this.log(`[scheduler] 一次性任务 ${schedule.id} 已过期，立即执行`);
         this.executeJob(schedule);
         this.remove(schedule.id);
         return;
       }
       const timer = setTimeout(() => {
         this.executeJob(schedule);
-        // 単発は実行後に削除
+        // 一次性任务执行后删除
         this.remove(schedule.id);
       }, delay);
       this.timers.set(schedule.id, timer);
       const runDate = new Date(schedule.runAt);
       this.log(
-        `[scheduler] Timer set: ${schedule.id} → ${runDate.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} (${Math.round(delay / 1000)}s)`
+        `[scheduler] 定时器已设置: ${schedule.id} → ${runDate.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} (${Math.round(delay / 1000)}秒)`
       );
     }
   }
@@ -320,38 +320,38 @@ export class Scheduler {
     }
   }
   private async executeJob(schedule: Schedule): Promise<void> {
-    // 常にagentモードで実行
+    // 始终使用 agent 模式执行
     const agentRunner = this.agentRunners.get(schedule.platform);
     if (!agentRunner) {
-      // agentRunnerがない場合はフォールバック
+      // 没有 agentRunner 时的回退方案
       const sender = this.senders.get(schedule.platform);
       if (sender) {
         const prefix = schedule.label ? `⏰ **${schedule.label}**\n` : '⏰ ';
         await sender(schedule.channelId, `${prefix}${schedule.message}`);
-        this.log(`[scheduler] Executed (fallback): ${schedule.id} → ${schedule.channelId}`);
+        this.log(`[scheduler] 已执行（回退）: ${schedule.id} → ${schedule.channelId}`);
       } else {
-        console.error(`[scheduler] No runner/sender for platform: ${schedule.platform}`);
+        console.error(`[scheduler] 平台 ${schedule.platform} 没有运行器/发送器`);
       }
       return;
     }
     try {
-      this.log(`[scheduler] Running agent for: ${schedule.id}`);
+      this.log(`[scheduler] 正在为 ${schedule.id} 运行 Agent`);
       const result = await agentRunner(schedule.message, schedule.channelId);
-      this.log(`[scheduler] Agent completed: ${schedule.id} (${result.length} chars)`);
+      this.log(`[scheduler] Agent 执行完成: ${schedule.id} (${result.length} 字符)`);
     } catch (error) {
-      console.error(`[scheduler] Failed to execute ${schedule.id}:`, error);
+      console.error(`[scheduler] 执行 ${schedule.id} 失败:`, error);
     }
   }
-  // ─── Persistence ──────────────────────────────────────────────────
+  // ─── 持久化 ──────────────────────────────────────────────────
   private load(): void {
     try {
       if (existsSync(this.filePath)) {
         const raw = readFileSync(this.filePath, 'utf-8');
         this.schedules = JSON.parse(raw);
-        this.log(`[scheduler] Loaded ${this.schedules.length} schedules from ${this.filePath}`);
+        this.log(`[scheduler] 从 ${this.filePath} 加载了 ${this.schedules.length} 个调度任务`);
       }
     } catch (error) {
-      console.error('[scheduler] Failed to load schedules:', error);
+      console.error('[scheduler] 加载调度任务失败:', error);
       this.schedules = [];
     }
   }
@@ -362,20 +362,20 @@ export class Scheduler {
         mkdirSync(dir, { recursive: true });
       }
       this.lastSaveTime = Date.now();
-      // アトミック書き込み: 一時ファイル → リネーム
+      // 原子写入：临时文件 → 重命名
       const tmpPath = `${this.filePath}.tmp`;
       writeFileSync(tmpPath, JSON.stringify(this.schedules, null, 2), 'utf-8');
       renameSync(tmpPath, this.filePath);
     } catch (error) {
-      console.error('[scheduler] Failed to save schedules:', error);
-      // 一時ファイルが残っていたら削除
+      console.error('[scheduler] 保存调度任务失败:', error);
+      // 如果临时文件残留，则删除
       const tmpPath = `${this.filePath}.tmp`;
       try {
         if (existsSync(tmpPath)) {
           unlinkSync(tmpPath);
         }
       } catch {
-        // クリーンアップ失敗は無視
+        // 清理失败忽略
       }
     }
   }
@@ -383,9 +383,9 @@ export class Scheduler {
     return `sch_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   }
 }
-// ─── Formatter ───────────────────────────────────────────────────────
+// ─── 格式化器 ───────────────────────────────────────────────────────
 /**
- * スケジュール一覧をフォーマット
+ * 格式化调度任务列表
  */
 export function formatScheduleList(
   schedules: Schedule[],
@@ -396,18 +396,18 @@ export function formatScheduleList(
 
   const statusHeader: string[] = [];
   if (!schedulerEnabled) {
-    statusHeader.push('⚠️ **スケジューラは無効です** (`SCHEDULER_ENABLED=false`)');
+    statusHeader.push('⚠️ **调度器已禁用** (`SCHEDULER_ENABLED=false`)');
   }
   if (!startupEnabled) {
-    statusHeader.push('⚠️ **スタートアップは無効です** (`STARTUP_ENABLED=false`)');
+    statusHeader.push('⚠️ **启动任务已禁用** (`STARTUP_ENABLED=false`)');
   }
 
   if (schedules.length === 0) {
     const header = statusHeader.length > 0 ? statusHeader.join('\n') + '\n\n' : '';
-    return header + '📋 スケジュールはありません';
+    return header + '📋 没有调度任务';
   }
 
-  // Split into regular schedules and startup tasks
+  // 分离普通调度任务和启动任务
   const regularSchedules = schedules.filter((s) => s.type !== 'startup');
   const startupTasks = schedules.filter((s) => s.type === 'startup');
 
@@ -427,13 +427,13 @@ export function formatScheduleList(
       );
     } else if (s.type === 'startup') {
       return (
-        `**${i + 1}.** ${status} 🚀 起動時に実行${label}\n` +
+        `**${i + 1}.** ${status} 🚀 启动时执行${label}\n` +
         `└ 📝 ${s.message}\n` +
         `└ 📢 ${channelMention}\n` +
         `└ 🆔 \`${s.id}\``
       );
     } else {
-      // once (単発)
+      // once（一次性）
       return (
         `**${i + 1}.** ${status} ⏰ ${formatTime(s.runAt!)}${label}\n` +
         `└ 📝 ${s.message}\n` +
@@ -448,14 +448,14 @@ export function formatScheduleList(
   if (regularSchedules.length > 0) {
     const lines = regularSchedules.map((s, i) => formatItem(s, i));
     sections.push(
-      `📋 **スケジュール一覧** (${regularSchedules.length}件)\n\n${lines.join('\n' + SCHEDULE_SEPARATOR + '\n')}`
+      `📋 **调度任务列表** (${regularSchedules.length}项)\n\n${lines.join('\n' + SCHEDULE_SEPARATOR + '\n')}`
     );
   }
 
   if (startupTasks.length > 0) {
     const lines = startupTasks.map((s, i) => formatItem(s, i));
     sections.push(
-      `🚀 **スタートアップタスク** (${startupTasks.length}件)\n\n${lines.join('\n' + SCHEDULE_SEPARATOR + '\n')}`
+      `🚀 **启动任务** (${startupTasks.length}项)\n\n${lines.join('\n' + SCHEDULE_SEPARATOR + '\n')}`
     );
   }
 
@@ -467,35 +467,35 @@ function formatTime(iso: string): string {
   return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 }
 /**
- * cron式を人間が読める形式に変換
- * @param expression cron式 (分 時 日 月 曜日)
+ * 将 cron 表达式转换为人类可读的格式
+ * @param expression cron 表达式 (分 时 日 月 星期)
  */
 function cronToHuman(expression: string): string {
   const parts = expression.split(/\s+/);
   if (parts.length !== 5) return expression;
   const [min, hour, dayOfMonth, month, dayOfWeek] = parts;
-  // 曜日マップ
+  // 星期映射
   const dayNames: Record<string, string> = {
     '0': '日',
-    '1': '月',
-    '2': '火',
-    '3': '水',
-    '4': '木',
-    '5': '金',
-    '6': '土',
+    '1': '一',
+    '2': '二',
+    '3': '三',
+    '4': '四',
+    '5': '五',
+    '6': '六',
     '7': '日',
   };
-  // 時刻をフォーマット
+  // 格式化时间
   const formatHourMin = (h: string, m: string): string => {
     if (h === '*' && m === '*') return '';
-    if (h === '*') return `毎時 ${m}分`;
-    if (m === '*') return `${h}時台`;
+    if (h === '*') return `每小时 ${m}分`;
+    if (m === '*') return `${h}点`;
     return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
   };
-  // 毎N分/毎N時間
+  // 每N分钟/每N小时
   const intervalMatch = min.match(/^\*\/(\d+)$/);
   if (intervalMatch && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-    return `${intervalMatch[1]}分毎`;
+    return `每${intervalMatch[1]}分钟`;
   }
   const hourIntervalMatch = hour.match(/^\*\/(\d+)$/);
   if (
@@ -505,50 +505,50 @@ function cronToHuman(expression: string): string {
     month === '*' &&
     dayOfWeek === '*'
   ) {
-    return `${hourIntervalMatch[1]}時間毎 (${min}分)`;
+    return `每${hourIntervalMatch[1]}小时 (${min}分)`;
   }
-  // 毎時
+  // 每小时
   if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-    return min === '0' ? '毎時' : `毎時 ${min}分`;
+    return min === '0' ? '每小时' : `每小时 ${min}分`;
   }
-  // 毎日
+  // 每天
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-    return `毎日 ${formatHourMin(hour, min)}`;
+    return `每天 ${formatHourMin(hour, min)}`;
   }
-  // 特定の曜日
+  // 特定星期
   if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
-    // 範囲形式 (1-5 = 月〜金)
+    // 范围格式 (1-5 = 周一至周五)
     const rangeMatch = dayOfWeek.match(/^(\d)-(\d)$/);
     if (rangeMatch) {
       const start = dayNames[rangeMatch[1]] || rangeMatch[1];
       const end = dayNames[rangeMatch[2]] || rangeMatch[2];
-      if (start === '月' && end === '金') {
-        return `平日 ${formatHourMin(hour, min)}`;
+      if (start === '一' && end === '五') {
+        return `工作日 ${formatHourMin(hour, min)}`;
       }
-      return `${start}〜${end}曜 ${formatHourMin(hour, min)}`;
+      return `${start}至${end} ${formatHourMin(hour, min)}`;
     }
-    // 単一の曜日
+    // 单个星期
     const dayName = dayNames[dayOfWeek] || dayOfWeek;
-    return `毎週${dayName}曜 ${formatHourMin(hour, min)}`;
+    return `每周${dayName} ${formatHourMin(hour, min)}`;
   }
-  // 特定の日
+  // 特定日期
   if (dayOfMonth !== '*' && month === '*' && dayOfWeek === '*') {
-    return `毎月${dayOfMonth}日 ${formatHourMin(hour, min)}`;
+    return `每月${dayOfMonth}日 ${formatHourMin(hour, min)}`;
   }
-  // その他: そのまま返す
+  // 其他情况：原样返回
   return expression;
 }
-// ─── Parser ──────────────────────────────────────────────────────────
+// ─── 解析器 ──────────────────────────────────────────────────────────
 /**
- * 自然言語風の入力をパースしてスケジュールパラメータに変換
+ * 将自然语言风格的输入解析为调度参数
  *
- * 対応フォーマット:
- * - "30分後 ミーティング開始" → once, 30分後
- * - "1時間後 休憩しよう" → once, 1時間後
- * - "15:00 レビュー" → once, 今日15:00（過ぎていたら明日）
- * - "毎日 9:00 おはよう" → cron, 0 9 * * *
- * - "毎時 チェック" → cron, 0 * * * *
- * - "cron 0 9 * * * おはよう" → cron, 直接指定
+ * 支持的格式:
+ * - "30分钟后 开始会议" → once, 30分钟后
+ * - "1小时后 休息一下" → once, 1小时后
+ * - "15:00 代码审查" → once, 今天15:00（如果已过则为明天）
+ * - "每天 9:00 早上好" → cron, 0 9 * * *
+ * - "每小时 检查" → cron, 0 * * * *
+ * - "cron 0 9 * * * 早上好" → cron, 直接指定
  */
 export function parseScheduleInput(input: string): {
   type: ScheduleType;
@@ -558,20 +558,20 @@ export function parseScheduleInput(input: string): {
   targetChannelId?: string;
 } | null {
   let trimmed = input.trim();
-  // -c <#channelId> または --channel <#channelId> オプションを抽出
+  // 提取 -c <#channelId> 或 --channel <#channelId> 选项
   let targetChannelId: string | undefined;
   const channelOptMatch = trimmed.match(/(?:^|\s)(?:-c|--channel)\s+<#(\d+)>(?:\s|$)/);
   if (channelOptMatch) {
     targetChannelId = channelOptMatch[1];
     trimmed = trimmed.replace(channelOptMatch[0], ' ').trim();
   }
-  // <#channelId> が先頭にある場合も対応
+  // 也支持 <#channelId> 开头的格式
   const channelPrefixMatch = trimmed.match(/^<#(\d+)>\s+/);
   if (!targetChannelId && channelPrefixMatch) {
     targetChannelId = channelPrefixMatch[1];
     trimmed = trimmed.replace(channelPrefixMatch[0], '').trim();
   }
-  // cron式の直接指定: "cron 0 9 * * * メッセージ"
+  // cron 表达式直接指定: "cron 0 9 * * * 消息"
   const cronMatch = trimmed.match(/^cron\s+((?:\S+\s+){4}\S+)\s+(.+)$/i);
   if (cronMatch) {
     return {
@@ -581,8 +581,8 @@ export function parseScheduleInput(input: string): {
       targetChannelId,
     };
   }
-  // "毎日 HH:MM メッセージ"
-  const dailyMatch = trimmed.match(/^毎日\s+(\d{1,2}):(\d{2})\s+(.+)$/);
+  // "每天 HH:MM 消息"
+  const dailyMatch = trimmed.match(/^每天\s+(\d{1,2}):(\d{2})\s+(.+)$/);
   if (dailyMatch) {
     const hour = parseInt(dailyMatch[1], 10);
     const min = parseInt(dailyMatch[2], 10);
@@ -593,8 +593,8 @@ export function parseScheduleInput(input: string): {
       targetChannelId,
     };
   }
-  // "毎時 メッセージ" or "毎時 MM分 メッセージ"
-  const hourlyMatch = trimmed.match(/^毎時\s+(?:(\d{1,2})分\s+)?(.+)$/);
+  // "每小时 消息" or "每小时 MM分 消息"
+  const hourlyMatch = trimmed.match(/^每小时\s+(?:(\d{1,2})分\s+)?(.+)$/);
   if (hourlyMatch) {
     const min = hourlyMatch[1] ? parseInt(hourlyMatch[1], 10) : 0;
     return {
@@ -604,17 +604,17 @@ export function parseScheduleInput(input: string): {
       targetChannelId,
     };
   }
-  // "毎週月曜 HH:MM メッセージ" (曜日対応)
-  const weeklyMatch = trimmed.match(/^毎週(月|火|水|木|金|土|日)曜?\s+(\d{1,2}):(\d{2})\s+(.+)$/);
+  // "每周一 HH:MM 消息" (支持星期)
+  const weeklyMatch = trimmed.match(/^每周(一|二|三|四|五|六|日)??\s+(\d{1,2}):(\d{2})\s+(.+)$/);
   if (weeklyMatch) {
     const dayMap: Record<string, number> = {
       日: 0,
-      月: 1,
-      火: 2,
-      水: 3,
-      木: 4,
-      金: 5,
-      土: 6,
+      一: 1,
+      二: 2,
+      三: 3,
+      四: 4,
+      五: 5,
+      六: 6,
     };
     const day = dayMap[weeklyMatch[1]] ?? 1;
     const hour = parseInt(weeklyMatch[2], 10);
@@ -626,8 +626,8 @@ export function parseScheduleInput(input: string): {
       targetChannelId,
     };
   }
-  // "N分後 メッセージ" or "N時間後 メッセージ"
-  const relativeMatch = trimmed.match(/^(\d+)\s*(分|時間|秒)後?\s+(.+)$/);
+  // "N分钟后 消息" or "N小时后 消息"
+  const relativeMatch = trimmed.match(/^(\d+)\s*(分|小时|秒)后?\s+(.+)$/);
   if (relativeMatch) {
     const amount = parseInt(relativeMatch[1], 10);
     const unit = relativeMatch[2];
@@ -639,7 +639,7 @@ export function parseScheduleInput(input: string): {
       case '分':
         ms = amount * 60 * 1000;
         break;
-      case '時間':
+      case '小时':
         ms = amount * 60 * 60 * 1000;
         break;
       default:
@@ -652,22 +652,22 @@ export function parseScheduleInput(input: string): {
       targetChannelId,
     };
   }
-  // "HH:MM メッセージ" → 今日のその時刻（過ぎていたら明日）
+  // "HH:MM 消息" → 今天的该时刻（如果已过则为明天）
   const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s+(.+)$/);
   if (timeMatch) {
     const hour = parseInt(timeMatch[1], 10);
     const min = parseInt(timeMatch[2], 10);
     const now = new Date();
-    // Asia/Tokyo で設定
+    // 以 Asia/Tokyo 时区设置
     const jstOffset = 9 * 60; // JST = UTC+9
     const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
     const jstMinutes = utcMinutes + jstOffset;
     const targetMinutes = hour * 60 + min;
-    // JSTベースで今日か明日かを判定
+    // 基于 JST 判断今天还是明天
     const currentJstMinutes = jstMinutes % (24 * 60);
     let diffMinutes = targetMinutes - currentJstMinutes;
     if (diffMinutes <= 0) {
-      diffMinutes += 24 * 60; // 明日
+      diffMinutes += 24 * 60; // 明天
     }
     const runAt = new Date(now.getTime() + diffMinutes * 60 * 1000);
     return {
@@ -677,13 +677,13 @@ export function parseScheduleInput(input: string): {
       targetChannelId,
     };
   }
-  // "YYYY-MM-DD HH:MM メッセージ"
+  // "YYYY-MM-DD HH:MM 消息"
   const dateTimeMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s+(.+)$/);
   if (dateTimeMatch) {
     const dateStr = dateTimeMatch[1];
     const hour = parseInt(dateTimeMatch[2], 10);
     const min = parseInt(dateTimeMatch[3], 10);
-    // JST として解釈
+    // 解释为 JST 时区
     const runAt = new Date(
       `${dateStr}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00+09:00`
     );
@@ -694,8 +694,8 @@ export function parseScheduleInput(input: string): {
       targetChannelId,
     };
   }
-  // "起動時 メッセージ" or "startup メッセージ"
-  const startupMatch = trimmed.match(/^(?:起動時|startup)\s+(.+)$/i);
+  // "启动时 消息" or "startup 消息"
+  const startupMatch = trimmed.match(/^(?:启动时|startup)\s+(.+)$/i);
   if (startupMatch) {
     return {
       type: 'startup',
