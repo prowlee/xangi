@@ -3,18 +3,18 @@ import { join, dirname } from 'path';
 import { randomUUID } from 'crypto';
 
 /**
- * セッション管理（appSessionId方式）
+ * 会话管理（appSessionId 方式）
  *
- * - appSessionId: xangi独自のセッションID。/new時やチャット開始時にxangi側で即確定
- * - providerSessionId: Claude Code等のbackendが返すsessionId。応答後に後付け保存
+ * - appSessionId: xangi 自身的会话 ID。/new 时或聊天开始时由 xangi 立即确定
+ * - providerSessionId: Claude Code 等后端返回的 sessionId。响应后附加保存
  *
- * sessions.json の構造:
+ * sessions.json 的结构:
  * {
  *   "activeByContext": { "<contextKey>": "<appSessionId>" },
  *   "sessions": { "<appSessionId>": SessionEntry }
  * }
  *
- * ログファイル: logs/sessions/<appSessionId>.jsonl
+ * 日志文件: logs/sessions/<appSessionId>.jsonl
  */
 
 export type SessionScope = 'interactive' | 'scheduler';
@@ -48,7 +48,7 @@ let data: SessionsFile = { activeByContext: {}, sessions: {} };
 let currentBootId: string = randomUUID();
 
 /**
- * sessions.json のパスを初期化
+ * 初始化 sessions.json 的路径
  */
 export function initSessions(dataDir: string): void {
   sessionsPath = join(dataDir, 'sessions.json');
@@ -63,13 +63,13 @@ export function getBootId(): string {
 
 export function getSessionsPath(): string {
   if (!sessionsPath) {
-    throw new Error('Sessions not initialized. Call initSessions(dataDir) first.');
+    throw new Error('会话未初始化。请先调用 initSessions(dataDir)。');
   }
   return sessionsPath;
 }
 
 /**
- * ファイルからセッションを読み込む（旧フォーマットとの後方互換あり）
+ * 从文件读取会话（向后兼容旧格式）
  */
 function loadSessionsFromFile(): void {
   const path = getSessionsPath();
@@ -78,11 +78,11 @@ function loadSessionsFromFile(): void {
       const raw = readFileSync(path, 'utf-8');
       const parsed = JSON.parse(raw);
 
-      // 新フォーマット検出
+      // 检测新格式
       if (parsed.activeByContext && parsed.sessions) {
         data = parsed as SessionsFile;
       } else {
-        // 旧フォーマット: { channelId: SessionEntry | string } → 移行
+        // 旧格式: { channelId: SessionEntry | string } → 迁移
         data = { activeByContext: {}, sessions: {} };
         for (const [key, value] of Object.entries(parsed)) {
           const entry =
@@ -124,12 +124,12 @@ function loadSessionsFromFile(): void {
           };
           data.activeByContext[key] = appId;
         }
-        console.log(`[xangi] Migrated ${Object.keys(data.sessions).length} sessions to new format`);
+        console.log(`[xangi] 已将 ${Object.keys(data.sessions).length} 个会话迁移到新格式`);
       }
-      console.log(`[xangi] Loaded ${Object.keys(data.sessions).length} sessions from ${path}`);
+      console.log(`[xangi] 从 ${path} 加载了 ${Object.keys(data.sessions).length} 个会话`);
     }
   } catch (err) {
-    console.error('[xangi] Failed to load sessions:', err);
+    console.error('[xangi] 加载会话失败:', err);
     data = { activeByContext: {}, sessions: {} };
   }
 }
@@ -140,7 +140,7 @@ function saveSessionsToFile(): void {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, JSON.stringify(data, null, 2) + '\n', 'utf-8');
   } catch (err) {
-    console.error('[xangi] Failed to save sessions:', err);
+    console.error('[xangi] 保存会话失败:', err);
   }
 }
 
@@ -149,7 +149,7 @@ function purgeSchedulerSessions(): void {
   for (const [id, entry] of Object.entries(data.sessions)) {
     if (entry.scope === 'scheduler') {
       delete data.sessions[id];
-      // activeByContextからも消す
+      // 同时从 activeByContext 中删除
       for (const [ctx, activeId] of Object.entries(data.activeByContext)) {
         if (activeId === id) {
           delete data.activeByContext[ctx];
@@ -159,13 +159,13 @@ function purgeSchedulerSessions(): void {
     }
   }
   if (purged > 0) {
-    console.log(`[xangi] Purged ${purged} stale scheduler session(s)`);
+    console.log(`[xangi] 已清理 ${purged} 个过期的调度器会话`);
     saveSessionsToFile();
   }
 }
 
 /**
- * appSessionIdを生成（ULID風の時刻ソート可能なID）
+ * 生成 appSessionId（ULID 风格的可按时间排序的 ID）
  */
 function generateAppSessionId(): string {
   const ts = Date.now().toString(36).padStart(9, '0');
@@ -173,24 +173,24 @@ function generateAppSessionId(): string {
   return `${ts}_${rand}`;
 }
 
-// ─── Public API ───
+// ─── 公共 API ───
 
 /**
- * contextKey(channelId等)からアクティブなappSessionIdを取得
+ * 从 contextKey（channelId 等）获取活跃的 appSessionId
  */
 export function getActiveSessionId(contextKey: string): string | undefined {
   return data.activeByContext[contextKey];
 }
 
 /**
- * appSessionIdからセッション情報を取得
+ * 从 appSessionId 获取会话信息
  */
 export function getSessionEntry(appSessionId: string): SessionEntry | undefined {
   return data.sessions[appSessionId];
 }
 
 /**
- * contextKeyからアクティブセッションのproviderSessionIdを取得（--resume用）
+ * 从 contextKey 获取活跃会话的 providerSessionId（用于 --resume）
  */
 export function getProviderSessionId(contextKey: string): string | undefined {
   const appId = data.activeByContext[contextKey];
@@ -199,14 +199,14 @@ export function getProviderSessionId(contextKey: string): string | undefined {
 }
 
 /**
- * 後方互換: getSession(channelId) → providerSessionId
+ * 向后兼容: getSession(channelId) → providerSessionId
  */
 export function getSession(channelId: string): string | undefined {
   return getProviderSessionId(channelId);
 }
 
 /**
- * 新しいセッションを作成してアクティブにする
+ * 创建新会话并设为活跃
  */
 export function createSession(
   contextKey: string,
@@ -239,7 +239,7 @@ export function createSession(
 }
 
 /**
- * セッションにproviderSessionIdを後付け保存
+ * 为会话附加保存 providerSessionId
  */
 export function setProviderSessionId(
   appSessionId: string,
@@ -257,8 +257,8 @@ export function setProviderSessionId(
 }
 
 /**
- * 後方互換: setSession(channelId, providerSessionId, scope)
- * アクティブセッションが無ければ新規作成、あれば更新
+ * 向后兼容: setSession(channelId, providerSessionId, scope)
+ * 如果没有活跃会话则创建新会话，否则更新
  */
 export function setSession(
   channelId: string,
@@ -273,7 +273,7 @@ export function setSession(
 }
 
 /**
- * セッションのタイトルを更新
+ * 更新会话标题
  */
 export function updateSessionTitle(appSessionId: string, title: string): void {
   const entry = data.sessions[appSessionId];
@@ -284,7 +284,7 @@ export function updateSessionTitle(appSessionId: string, title: string): void {
 }
 
 /**
- * セッションのメッセージ数をインクリメント
+ * 增加会话的消息计数
  */
 export function incrementMessageCount(appSessionId: string): void {
   const entry = data.sessions[appSessionId];
@@ -295,13 +295,13 @@ export function incrementMessageCount(appSessionId: string): void {
 }
 
 /**
- * セッションをアーカイブ
+ * 将会话归档
  */
 export function archiveSession(appSessionId: string): void {
   const entry = data.sessions[appSessionId];
   if (!entry) return;
   entry.archived = true;
-  // activeByContextから外す
+  // 从 activeByContext 中移除
   for (const [ctx, id] of Object.entries(data.activeByContext)) {
     if (id === appSessionId) {
       delete data.activeByContext[ctx];
@@ -311,7 +311,7 @@ export function archiveSession(appSessionId: string): void {
 }
 
 /**
- * 既存セッションを指定contextKeyのアクティブにする（resume用）
+ * 将已有会话设为指定 contextKey 的活跃会话（用于 resume）
  */
 export function activateSession(contextKey: string, appSessionId: string): void {
   data.activeByContext[contextKey] = appSessionId;
@@ -324,7 +324,7 @@ export function activateSession(contextKey: string, appSessionId: string): void 
 }
 
 /**
- * セッションを完全削除（sessions.jsonから消す）
+ * 完全删除会话（从 sessions.json 中移除）
  */
 export function removeSession(appSessionId: string): void {
   delete data.sessions[appSessionId];
@@ -337,7 +337,7 @@ export function removeSession(appSessionId: string): void {
 }
 
 /**
- * セッションを削除（/newで使う）
+ * 删除会话（用于 /new 命令）
  */
 export function deleteSession(channelId: string): boolean {
   const appId = data.activeByContext[channelId];
@@ -350,7 +350,7 @@ export function deleteSession(channelId: string): boolean {
 }
 
 /**
- * アクティブなappSessionIdを取得。無ければ新規作成
+ * 获取活跃的 appSessionId。如果不存在则创建新会话
  */
 export function ensureSession(
   contextKey: string,
@@ -364,7 +364,7 @@ export function ensureSession(
 }
 
 /**
- * 全セッション一覧（サイドバー用）
+ * 获取所有会话列表（用于侧边栏）
  */
 export function listAllSessions(): SessionEntry[] {
   return Object.values(data.sessions)
@@ -373,14 +373,14 @@ export function listAllSessions(): SessionEntry[] {
 }
 
 /**
- * セッション数を取得
+ * 获取会话数量
  */
 export function getSessionCount(): number {
   return Object.keys(data.sessions).length;
 }
 
 /**
- * 全セッションをクリア（テスト用）
+ * 清除所有会话（用于测试）
  */
 export function clearSessions(): void {
   data = { activeByContext: {}, sessions: {} };
