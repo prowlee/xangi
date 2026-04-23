@@ -1,58 +1,58 @@
-# Discord Bot セットアップガイド
+# Discord Bot 设置指南
 
-xangi を Discord で使用するための Bot 作成手順。
+在 Discord 上使用 xangi 所需的 Bot 创建步骤。
 
-## 1. Discord Developer Portal にアクセス
+## 1. 访问 Discord Developer Portal
 
 https://discord.com/developers/applications
 
-Discord アカウントでログイン。
+使用 Discord 账号登录。
 
-## 2. 新しいアプリケーション作成
+## 2. 创建新的应用程序
 
-1. 右上の **「New Application」** をクリック
-2. 名前を入力: `xangi`（任意の名前）
-3. **「Create」** をクリック
+1. 点击右上角的 **“New Application”**
+2. 输入名称：`xangi`（可使用任意名称）
+3. 点击 **“Create”**
 
-## 3. Bot 作成とトークン取得
+## 3. 创建 Bot 并获取 Token
 
-1. 左メニューの **「Bot」** をクリック
-2. **「Reset Token」** → **「Yes, do it!」**
-3. 表示された **トークンをコピー**（後で使用）
+1. 点击左侧菜单中的 **“Bot”**
+2. 点击 **“Reset Token”** → **“Yes, do it!”**
+3. **复制显示的 Token**（稍后使用）
 
-⚠️ **注意**: トークンは一度しか表示されない。紛失した場合は再生成が必要。
+⚠️ **注意**：Token 只会显示一次。如果丢失，需要重新生成。
 
-## 4. Bot 権限設定（重要）
+## 4. Bot 权限设置（重要）
 
-同じ Bot ページで **Privileged Gateway Intents** を設定：
+在同一 Bot 页面中设置 **Privileged Gateway Intents**：
 
-| Intent | 必須 | 説明 |
+| Intent | 是否必须 | 说明 |
 |--------|------|------|
-| Presence Intent | 任意 | ユーザーのオンライン状態取得 |
-| Server Members Intent | 任意 | サーバーメンバー情報取得 |
-| **Message Content Intent** | **必須** | メッセージ内容の読み取り |
+| Presence Intent | 可选 | 获取用户的在线状态 |
+| Server Members Intent | 可选 | 获取服务器成员信息 |
+| **Message Content Intent** | **必须** | 读取消息内容 |
 
-**⚠️ Message Content Intent を ON にしないとメッセージが読めない！**
+**⚠️ 如果不开启 Message Content Intent，Bot 将无法读取消息！**
 
-## 5. Bot をサーバーに招待
+## 5. 邀请 Bot 加入服务器
 
-1. 左メニュー **「OAuth2」** → **「URL Generator」**
-2. **SCOPES** で選択：
+1. 点击左侧菜单 **“OAuth2”** → **“URL Generator”**
+2. 在 **SCOPES** 中选择：
    - ✅ `bot`
-   - ✅ `applications.commands`（スラッシュコマンド用）
-3. **BOT PERMISSIONS** で選択：
-   - ✅ Send Messages
-   - ✅ Send Messages in Threads
-   - ✅ Read Message History
-   - ✅ Add Reactions
-   - ✅ Use Slash Commands
-4. 生成された URL をコピー
-5. ブラウザで URL を開き、Bot を招待するサーバーを選択
+   - ✅ `applications.commands`（用于斜杠命令）
+3. 在 **BOT PERMISSIONS** 中选择：
+   - ✅ Send Messages（发送消息）
+   - ✅ Send Messages in Threads（在线程中发送消息）
+   - ✅ Read Message History（读取消息历史）
+   - ✅ Add Reactions（添加反应）
+   - ✅ Use Slash Commands（使用斜杠命令）
+4. 复制生成的 URL
+5. 在浏览器中打开 URL，选择要邀请 Bot 的服务器
 
-## 6. 環境変数を設定
+## 6. 设置环境变量
 
 ```bash
-# .env を編集
+# 编辑 .env 文件
 cp .env.example .env
 vim .env
 ```
@@ -61,62 +61,62 @@ vim .env
 # Discord Bot Token
 DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE
 
-# 許可するユーザーID（1人のみ）
+# 允许的用户 ID（仅限一人）
 ALLOWED_USER=YOUR_DISCORD_USER_ID
 ```
 
-## 7. 動作確認
+## 7. 验证运行
 
 ```bash
-# ビルド
+# 构建
 npm run build
 
-# Docker で起動
+# 使用 Docker 启动
 docker compose up -d --build
 
-# ログ確認
+# 查看日志
 docker logs -f xangi
 ```
 
-Discord サーバーで `/new` や `/skills` を試す、または Bot をメンションして話しかける：
+在 Discord 服务器中尝试 `/new` 或 `/skills` 命令，或者 @提及 Bot 并与之对话：
 ```
-@xangi こんにちは！
+@xangi 你好！
 ```
 
-## IDの調べ方
+## ID 的查询方法
 
-### 開発者モードを有効にする
+### 启用开发者模式
 
-1. Discord設定 → 詳細設定 → **開発者モード** を ON
+1. Discord 设置 → 高级设置 → 开启 **开发者模式**
 
-### ユーザーID
+### 用户 ID
 
-1. ユーザーを右クリック → **「ユーザーIDをコピー」**
+1. 右键点击用户 → **“复制用户 ID”**
 
-### チャンネルID
+### 频道 ID
 
-1. チャンネルを右クリック → **「チャンネルIDをコピー」**
+1. 右键点击频道 → **“复制频道 ID”**
 
-## トラブルシューティング
+## 故障排除
 
-### Bot が反応しない
+### Bot 没有反应
 
-1. **Message Content Intent** が ON になっているか確認
-2. Bot がサーバーに招待されているか確認
-3. `ALLOWED_USER` が正しく設定されているか確認
+1. 确认 **Message Content Intent** 是否已开启
+2. 确认 Bot 已被邀请到服务器
+3. 确认 `ALLOWED_USER` 设置是否正确
 
-### スラッシュコマンドが表示されない
+### 斜杠命令不显示
 
-1. `applications.commands` スコープで招待したか確認
-2. Bot を一度サーバーから削除して再招待
-3. Discord を再起動
+1. 确认是否使用了 `applications.commands` 范围进行邀请
+2. 将 Bot 从服务器中删除后重新邀请
+3. 重启 Discord
 
-### 「Discord token not configured」エラー
+### “Discord token not configured” 错误
 
-`.env` の `DISCORD_TOKEN` が空になっている。トークンを設定する。
+`.env` 中的 `DISCORD_TOKEN` 为空。请设置 Token。
 
-## セキュリティ注意事項
+## 安全注意事项
 
-- **トークンを Git にコミットしない**（`.gitignore` に `.env` を追加済み）
-- **トークンを公開しない**（漏洩した場合は即座に再生成）
-- `ALLOWED_USER` で使用できるユーザーを1人に制限（Claude Code 利用規約遵守）
+- **不要将 Token 提交到 Git**（`.gitignore` 已添加 `.env`）
+- **不要公开 Token**（如果泄露，请立即重新生成）
+- 使用 `ALLOWED_USER` 将可用用户限制为一人（遵守 Claude Code 使用条款）
