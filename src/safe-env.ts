@@ -1,10 +1,10 @@
 /**
- * AIエージェントに渡す環境変数のホワイトリスト
- * ここに記載された変数のみ CLI/exec プロセスに渡される
- * シークレット（トークン・APIキー等）は絶対に追加しないこと
+ * 传递给 AI Agent 的环境变量白名单
+ * 只有列出的变量会被传递给 CLI/exec 进程
+ * 绝对不要添加密钥（Token、API Key 等）
  */
 export const ALLOWED_ENV_KEYS = [
-  // シェル基本環境
+  // Shell 基本环境
   'PATH',
   'HOME',
   'USER',
@@ -18,7 +18,7 @@ export const ALLOWED_ENV_KEYS = [
   // Node.js
   'NODE_ENV',
   'NODE_PATH',
-  // xangi動作用
+  // xangi 运行用
   'WORKSPACE_PATH',
   'AGENT_BACKEND',
   'AGENT_MODEL',
@@ -29,7 +29,7 @@ export const ALLOWED_ENV_KEYS = [
 ];
 
 /**
- * ホワイトリスト方式で安全な環境変数のみ返す
+ * 使用白名单方式，只返回安全的环境变量
  */
 export function getSafeEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -39,7 +39,7 @@ export function getSafeEnv(): NodeJS.ProcessEnv {
     }
   }
 
-  // xangi-cmd (bin/) をPATHに追加
+  // 将 xangi-cmd (bin/) 添加到 PATH
   if (env.PATH && XANGI_BIN_DIR) {
     env.PATH = `${XANGI_BIN_DIR}:${env.PATH}`;
   }
@@ -47,7 +47,7 @@ export function getSafeEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-// xangiのbin/ディレクトリを起動時に解決
+// 在启动时解析 xangi 的 bin/ 目录
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 const XANGI_BIN_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin');
