@@ -1,9 +1,9 @@
 /**
- * スケジュール操作CLIモジュール
+ * 日程操作 CLI 模块
  *
- * .xangi/schedules.json を直接操作する。
- * Schedulerクラスがファイル変更を監視しているため、
- * ファイルを更新すれば実行中のxangiプロセスが自動リロードする。
+ * 直接操作 .xangi/schedules.json 文件。
+ * 由于 Scheduler 类会监听文件变化，
+ * 只要更新文件，正在运行的 xangi 进程就会自动重新加载。
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -52,7 +52,7 @@ function generateId(): string {
 async function scheduleList(): Promise<string> {
   const schedules = loadSchedules();
   if (schedules.length === 0) {
-    return '📋 スケジュールはありません';
+    return '📋 没有日程';
   }
   return formatScheduleList(schedules);
 }
@@ -62,16 +62,16 @@ async function scheduleAdd(flags: Record<string, string>): Promise<string> {
   const channelId = flags['channel'];
   const platform = (flags['platform'] || 'discord') as 'discord' | 'slack';
 
-  if (!input) throw new Error('--input is required');
-  if (!channelId) throw new Error('--channel is required');
+  if (!input) throw new Error('--input 是必需的');
+  if (!channelId) throw new Error('--channel 是必需的');
 
   const parsed = parseScheduleInput(input);
   if (!parsed) {
-    throw new Error(`スケジュール形式を解析できません: ${input}`);
+    throw new Error(`无法解析日程格式: ${input}`);
   }
 
   const schedules = loadSchedules();
-  // targetChannelId が指定されていればそちらを優先
+  // 如果指定了 targetChannelId，则优先使用
   const targetChannel = parsed.targetChannelId || channelId;
 
   const newSchedule: Schedule = {
@@ -88,42 +88,42 @@ async function scheduleAdd(flags: Record<string, string>): Promise<string> {
   schedules.push(newSchedule);
   saveSchedules(schedules);
 
-  return `✅ スケジュールを追加しました (ID: ${newSchedule.id})`;
+  return `✅ 已添加日程 (ID: ${newSchedule.id})`;
 }
 
 async function scheduleRemove(flags: Record<string, string>): Promise<string> {
   const id = flags['id'];
-  if (!id) throw new Error('--id is required');
+  if (!id) throw new Error('--id 是必需的');
 
   const schedules = loadSchedules();
   const index = schedules.findIndex((s) => s.id === id);
   if (index === -1) {
-    return `❌ スケジュールが見つかりません: ${id}`;
+    return `❌ 未找到日程: ${id}`;
   }
 
   schedules.splice(index, 1);
   saveSchedules(schedules);
 
-  return `🗑️ スケジュールを削除しました: ${id}`;
+  return `🗑️ 已删除日程: ${id}`;
 }
 
 async function scheduleToggle(flags: Record<string, string>): Promise<string> {
   const id = flags['id'];
-  if (!id) throw new Error('--id is required');
+  if (!id) throw new Error('--id 是必需的');
 
   const schedules = loadSchedules();
   const schedule = schedules.find((s) => s.id === id);
   if (!schedule) {
-    return `❌ スケジュールが見つかりません: ${id}`;
+    return `❌ 未找到日程: ${id}`;
   }
 
   schedule.enabled = !schedule.enabled;
   saveSchedules(schedules);
 
-  return `🔄 スケジュール ${id}: ${schedule.enabled ? '有効' : '無効'} に切り替えました`;
+  return `🔄 日程 ${id}: 已切换为 ${schedule.enabled ? '启用' : '禁用'}`;
 }
 
-// ─── Router ─────────────────────────────────────────────────────────
+// ─── 路由器 ─────────────────────────────────────────────────────────
 
 export async function scheduleCmd(command: string, flags: Record<string, string>): Promise<string> {
   switch (command) {
@@ -136,6 +136,6 @@ export async function scheduleCmd(command: string, flags: Record<string, string>
     case 'schedule_toggle':
       return scheduleToggle(flags);
     default:
-      throw new Error(`Unknown schedule command: ${command}`);
+      throw new Error(`未知的日程命令: ${command}`);
   }
 }
