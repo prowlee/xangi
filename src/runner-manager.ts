@@ -5,7 +5,7 @@ import type { ChatPlatform } from './prompts/index.js';
 import { deleteSession } from './sessions.js';
 
 /**
- * プール内のランナー情報
+ * 池中的运行器信息
  */
 interface PoolEntry {
   runner: PersistentRunner;
@@ -13,10 +13,10 @@ interface PoolEntry {
 }
 
 /**
- * 複数チャンネル同時処理を実現するランナーマネージャー
+ * 实现多频道同时处理的运行器管理器
  *
- * チャンネルごとに独立した PersistentRunner を管理し、
- * LRU eviction とアイドルタイムアウトでリソースを制御する。
+ * 为每个频道管理独立的 PersistentRunner，
+ * 通过 LRU 淘汰和空闲超时来控制资源。
  */
 export class RunnerManager implements AgentRunner {
   private pool = new Map<string, PoolEntry>();
@@ -27,10 +27,10 @@ export class RunnerManager implements AgentRunner {
   private platform?: ChatPlatform;
   private effort?: string;
 
-  /** デフォルトのチャンネルID（channelIdが未指定の場合に使用） */
+  /** 默认频道 ID（未指定 channelId 时使用） */
   private static readonly DEFAULT_CHANNEL = '__default__';
-  /** クリーンアップ実行間隔 */
-  private static readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5分
+  /** 清理执行间隔 */
+  private static readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5分钟
 
   constructor(
     agentConfig: AgentConfig,
@@ -45,18 +45,18 @@ export class RunnerManager implements AgentRunner {
     this.platform = options?.platform;
     this.effort = options?.effort;
     this.maxProcesses = options?.maxProcesses ?? 10;
-    this.idleTimeoutMs = options?.idleTimeoutMs ?? 30 * 60 * 1000; // 30分
+    this.idleTimeoutMs = options?.idleTimeoutMs ?? 30 * 60 * 1000; // 30分钟
 
-    // 定期クリーンアップ開始
+    // 开始定期清理
     this.cleanupInterval = setInterval(() => this.cleanupIdle(), RunnerManager.CLEANUP_INTERVAL_MS);
 
     console.log(
-      `[runner-manager] Initialized (maxProcesses: ${this.maxProcesses}, idleTimeout: ${this.idleTimeoutMs / 1000}s)`
+      `[runner-manager] 已初始化 (最大进程数: ${this.maxProcesses}, 空闲超时: ${this.idleTimeoutMs / 1000}秒)`
     );
   }
 
   /**
-   * チャンネルに対応する PersistentRunner を取得（なければ作成）
+   * 获取频道对应的 PersistentRunner（不存在则创建）
    */
   private getOrCreateRunner(channelId: string): PersistentRunner {
     const entry = this.pool.get(channelId);
@@ -65,13 +65,13 @@ export class RunnerManager implements AgentRunner {
       return entry.runner;
     }
 
-    // 上限チェック → LRU eviction
+    // 上限检查 → LRU 淘汰
     if (this.pool.size >= this.maxProcesses) {
       this.evictLRU();
     }
 
-    // 新しい PersistentRunner を作成
-    // web-chatチャンネルはWeb用のシステムプロンプトを使用
+    // 创建新的 PersistentRunner
+    // web-chat 频道使用 Web 专用的系统提示词
     const runnerPlatform = channelId === 'web-chat' ? ('web' as const) : this.platform;
     const runner = new PersistentRunner({
       ...this.agentConfig,
@@ -80,12 +80,12 @@ export class RunnerManager implements AgentRunner {
       effort: this.effort,
     });
 
-    // セッション無効化イベント: sessions.json からも削除して永続的にリセット
+    // 会话失效事件：也从 sessions.json 中删除，实现永久重置
     runner.on('session-invalidated', (ch: string, oldSessionId: string) => {
       if (ch) {
         deleteSession(ch);
         console.log(
-          `[runner-manager] Session invalidated for channel ${ch} (was: ${oldSessionId?.slice(0, 8) ?? 'none'}). Deleted from sessions.json.`
+          `[runner-manager] 频道 ${ch} 的会话已失效（原会话: ${oldSessionId?.slice(0, 8) ?? '无'}）。已从 sessions.json 中删除。`
         );
       }
     });
@@ -96,14 +96,14 @@ export class RunnerManager implements AgentRunner {
     });
 
     console.log(
-      `[runner-manager] Created runner for channel ${channelId} (pool: ${this.pool.size}/${this.maxProcesses})`
+      `[runner-manager] 为频道 ${channelId} 创建了运行器 (池: ${this.pool.size}/${this.maxProcesses})`
     );
 
     return runner;
   }
 
   /**
-   * 最も古い（LRU）ランナーを evict する
+   * 淘汰最久未使用（LRU）的运行器
    */
   private evictLRU(): void {
     let oldestChannel: string | null = null;
@@ -119,7 +119,7 @@ export class RunnerManager implements AgentRunner {
     if (oldestChannel) {
       const entry = this.pool.get(oldestChannel)!;
       console.log(
-        `[runner-manager] Evicting LRU runner for channel ${oldestChannel} (idle ${Math.round((Date.now() - entry.lastUsed) / 1000)}s)`
+        `[runner-manager] 淘汰频道 ${oldestChannel} 的 LRU 运行器 (空闲 ${Math.round((Date.now() - entry.lastUsed) / 1000)}秒)`
       );
       entry.runner.shutdown();
       this.pool.delete(oldestChannel);
@@ -127,7 +127,7 @@ export class RunnerManager implements AgentRunner {
   }
 
   /**
-   * アイドル状態のランナーをクリーンアップ
+   * 清理空闲的运行器
    */
   private cleanupIdle(): void {
     const now = Date.now();
@@ -142,7 +142,7 @@ export class RunnerManager implements AgentRunner {
     for (const channelId of toRemove) {
       const entry = this.pool.get(channelId)!;
       console.log(
-        `[runner-manager] Cleaning up idle runner for channel ${channelId} (idle ${Math.round((now - entry.lastUsed) / 1000)}s)`
+        `[runner-manager] 清理频道 ${channelId} 的空闲运行器 (空闲 ${Math.round((now - entry.lastUsed) / 1000)}秒)`
       );
       entry.runner.shutdown();
       this.pool.delete(channelId);
@@ -150,18 +150,18 @@ export class RunnerManager implements AgentRunner {
 
     if (toRemove.length > 0) {
       console.log(
-        `[runner-manager] Cleaned up ${toRemove.length} idle runner(s) (pool: ${this.pool.size}/${this.maxProcesses})`
+        `[runner-manager] 已清理 ${toRemove.length} 个空闲运行器 (池: ${this.pool.size}/${this.maxProcesses})`
       );
     }
   }
 
   /**
-   * リクエストを実行
+   * 执行请求
    */
   async run(prompt: string, options?: RunOptions): Promise<RunResult> {
     const channelId = options?.channelId ?? RunnerManager.DEFAULT_CHANNEL;
     const runner = this.getOrCreateRunner(channelId);
-    // セッションIDが渡されていればランナーに設定（プロセス再起動時の復元用）
+    // 如果传入了会话ID，则设置到运行器中（用于进程重启时的恢复）
     if (options?.sessionId) {
       runner.setSessionId(options.sessionId);
     }
@@ -169,7 +169,7 @@ export class RunnerManager implements AgentRunner {
   }
 
   /**
-   * ストリーミング実行
+   * 流式执行
    */
   async runStream(
     prompt: string,
@@ -178,7 +178,7 @@ export class RunnerManager implements AgentRunner {
   ): Promise<RunResult> {
     const channelId = options?.channelId ?? RunnerManager.DEFAULT_CHANNEL;
     const runner = this.getOrCreateRunner(channelId);
-    // セッションIDが渡されていればランナーに設定（プロセス再起動時の復元用）
+    // 如果传入了会话ID，则设置到运行器中（用于进程重启时的恢复）
     if (options?.sessionId) {
       runner.setSessionId(options.sessionId);
     }
@@ -186,8 +186,8 @@ export class RunnerManager implements AgentRunner {
   }
 
   /**
-   * 指定チャンネルのリクエストをキャンセル
-   * channelId なしの場合は全チャンネルを試す
+   * 取消指定频道的请求
+   * 如果没有指定 channelId，则尝试所有频道
    */
   cancel(channelId?: string): boolean {
     if (channelId) {
@@ -198,7 +198,7 @@ export class RunnerManager implements AgentRunner {
       return false;
     }
 
-    // channelId 未指定: 全ランナーを試す
+    // 未指定 channelId：尝试所有运行器
     for (const entry of this.pool.values()) {
       if (entry.runner.cancel()) {
         return true;
@@ -208,7 +208,7 @@ export class RunnerManager implements AgentRunner {
   }
 
   /**
-   * 指定チャンネルのランナーを完全に破棄（/new用）
+   * 完全销毁指定频道的运行器（用于 /new）
    */
   destroy(channelId: string): boolean {
     const entry = this.pool.get(channelId);
@@ -216,7 +216,7 @@ export class RunnerManager implements AgentRunner {
       entry.runner.shutdown();
       this.pool.delete(channelId);
       console.log(
-        `[runner-manager] Destroyed runner for channel ${channelId} (pool: ${this.pool.size}/${this.maxProcesses})`
+        `[runner-manager] 已销毁频道 ${channelId} 的运行器 (池: ${this.pool.size}/${this.maxProcesses})`
       );
       return true;
     }
@@ -224,7 +224,7 @@ export class RunnerManager implements AgentRunner {
   }
 
   /**
-   * 全ランナーをシャットダウン
+   * 关闭所有运行器
    */
   shutdown(): void {
     if (this.cleanupInterval) {
@@ -233,15 +233,15 @@ export class RunnerManager implements AgentRunner {
     }
 
     for (const [channelId, entry] of this.pool.entries()) {
-      console.log(`[runner-manager] Shutting down runner for channel ${channelId}`);
+      console.log(`[runner-manager] 正在关闭频道 ${channelId} 的运行器`);
       entry.runner.shutdown();
     }
     this.pool.clear();
-    console.log('[runner-manager] All runners shut down');
+    console.log('[runner-manager] 所有运行器已关闭');
   }
 
   /**
-   * プール状態の取得（デバッグ・ステータス表示用）
+   * 获取池状态（用于调试和状态显示）
    */
   getStatus(): {
     poolSize: number;
