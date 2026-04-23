@@ -2,9 +2,9 @@ import { appendFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 /**
- * セッション単位のトランスクリプト（会話ログ）をJSONLファイルに保存する
+ * 将会话单位的转录（对话日志）保存为 JSONL 文件
  *
- * ログはセッションごとに1ファイル:
+ * 每个会话一个日志文件：
  *   logs/sessions/<appSessionId>.jsonl
  */
 
@@ -34,12 +34,12 @@ function writeEntry(workdir: string, appSessionId: string, entry: TranscriptEntr
     const line = JSON.stringify(entry);
     appendFileSync(filePath, line + '\n');
   } catch (err) {
-    console.warn('[transcript] Failed to write log:', err);
+    console.warn('[transcript] 写入日志失败:', err);
   }
 }
 
 /**
- * ユーザーのプロンプトを記録
+ * 记录用户的提示词
  */
 export function logPrompt(workdir: string, appSessionId: string, prompt: string): void {
   writeEntry(workdir, appSessionId, {
@@ -51,7 +51,7 @@ export function logPrompt(workdir: string, appSessionId: string, prompt: string)
 }
 
 /**
- * AIの応答を記録
+ * 记录 AI 的响应
  */
 export function logResponse(
   workdir: string,
@@ -67,7 +67,7 @@ export function logResponse(
 }
 
 /**
- * エラーを記録
+ * 记录错误
  */
 export function logError(workdir: string, appSessionId: string, error: string): void {
   writeEntry(workdir, appSessionId, {
@@ -79,7 +79,7 @@ export function logError(workdir: string, appSessionId: string, error: string): 
 }
 
 /**
- * セッションのメッセージ一覧を読み出す
+ * 读取会话的消息列表
  */
 export function readSessionMessages(workdir: string, appSessionId: string): TranscriptEntry[] {
   try {
