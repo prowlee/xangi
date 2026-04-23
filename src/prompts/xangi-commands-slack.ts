@@ -1,7 +1,7 @@
 /**
- * Slack専用のxangiコマンド
+ * Slack 专用的 xangi 命令
  */
-export const XANGI_COMMANDS_SLACK = `## Slack操作
+export const XANGI_COMMANDS_SLACK = `## Slack 操作
 
-Slackではスレッド内で会話が継続されます。
-メンションまたは専用チャンネルでメッセージを送ってください。`;
+在 Slack 中，对话在线程内继续。
+请通过提及（@提及）或在专用频道中发送消息。`;
