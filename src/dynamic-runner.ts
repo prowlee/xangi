@@ -1,30 +1,22 @@
-import type { AgentRunner, RunOptions, RunResult, StreamCallbacks } from './agent-runner.js';
-import { createAgentRunner, getBackendDisplayName } from './agent-runner.js';
-import type { AgentConfig, Config } from './config.js';
-import { BackendResolver, type ResolvedBackend } from './backend-resolver.js';
-import { RunnerManager } from './runner-manager.js';
-import { deleteSession } from './sessions.js';
-import type { ChatPlatform } from './prompts/index.js';
-
 /**
- * チャンネルごとにバックエンドを動的に切り替えるランナーマネージャー
+ * 动态切换每个频道后端的运行管理器
  *
- * BackendResolver で解決したバックエンド設定に基づいて、
- * 適切な AgentRunner にリクエストをルーティングする。
+ * 基于 BackendResolver 解析出的后端设置，
+ * 将请求路由到适当的 AgentRunner。
  *
- * - claude-code (persistent): RunnerManager で管理（チャンネル別プロセス）
- * - claude-code (non-persistent): 共有 ClaudeCodeRunner
- * - codex / gemini / local-llm: バックエンド種別ごとの共有インスタンス
+ * - claude-code (持久化模式): 由 RunnerManager 管理（按频道进程）
+ * - claude-code (非持久化模式): 共享的 ClaudeCodeRunner
+ * - codex / gemini / local-llm: 按后端类型的共享实例
  */
 export class DynamicRunnerManager implements AgentRunner {
   private resolver: BackendResolver;
   private config: Config;
   private platform?: ChatPlatform;
 
-  /** デフォルトのランナー（.env設定ベース） */
+  /** 默认运行器（基于 .env 设置） */
   private defaultRunner: AgentRunner;
 
-  /** チャンネル別に生成したランナー（デフォルトと異なるバックエンドの場合） */
+  /** 按频道生成的运行器（当后端与默认不同时） */
   private channelRunners = new Map<string, { runner: AgentRunner; key: string }>();
 
   constructor(config: Config, resolver: BackendResolver) {
@@ -32,43 +24,43 @@ export class DynamicRunnerManager implements AgentRunner {
     this.resolver = resolver;
     this.platform = config.agent.platform;
 
-    // デフォルトランナーを作成
+    // 创建默认运行器
     this.defaultRunner = createAgentRunner(config.agent.backend, config.agent.config, {
       platform: this.platform,
     });
 
     console.log(
-      `[dynamic-runner] Initialized with default backend: ${getBackendDisplayName(config.agent.backend)}`
+      `[dynamic-runner] 已初始化，默认后端：${getBackendDisplayName(config.agent.backend)}`
     );
   }
 
   /**
-   * チャンネルに対応するランナーを取得
-   * resolvedBackendがデフォルトと同じならデフォルトランナーを返す
+   * 获取频道对应的运行器
+   * 如果 resolvedBackend 与默认相同，则返回默认运行器
    */
   private getRunner(channelId: string | undefined, resolved: ResolvedBackend): AgentRunner {
     if (!channelId) return this.defaultRunner;
 
-    // デフォルトと同じなら共有ランナーを使用
+    // 如果与默认相同，则使用共享运行器
     const resolverKey = this.makeKey(resolved);
     const defaultKey = this.makeKey(this.resolver.getDefault());
 
     if (resolverKey === defaultKey && !resolved.effort) {
-      // チャンネル用の別ランナーがあれば破棄
+      // 如果有频道的专用运行器，则销毁它
       this.destroyChannelRunner(channelId);
       return this.defaultRunner;
     }
 
-    // 既存のチャンネルランナーがあり、キーが一致すればそれを使う
+    // 如果已存在频道运行器且键匹配，则使用它
     const existing = this.channelRunners.get(channelId);
     if (existing && existing.key === resolverKey + (resolved.effort ?? '')) {
       return existing.runner;
     }
 
-    // 既存のチャンネルランナーを破棄
+    // 销毁已存在的频道运行器
     this.destroyChannelRunner(channelId);
 
-    // 新しいランナーを作成
+    // 创建新的运行器
     const runner = this.createRunnerFor(resolved, channelId);
     this.channelRunners.set(channelId, {
       runner,
@@ -76,7 +68,7 @@ export class DynamicRunnerManager implements AgentRunner {
     });
 
     console.log(
-      `[dynamic-runner] Created channel runner for ${channelId}: ${getBackendDisplayName(resolved.backend)}` +
+      `[dynamic-runner] 为频道 ${channelId} 创建运行器：${getBackendDisplayName(resolved.backend)}` +
         (resolved.model ? ` (${resolved.model})` : '') +
         (resolved.effort ? ` effort=${resolved.effort}` : '')
     );
@@ -85,7 +77,7 @@ export class DynamicRunnerManager implements AgentRunner {
   }
 
   /**
-   * ResolvedBackendから適切なランナーを作成
+   * 从 ResolvedBackend 创建适当的运行器
    */
   private createRunnerFor(resolved: ResolvedBackend, _channelId?: string): AgentRunner {
     const agentConfig: AgentConfig = {
@@ -93,7 +85,7 @@ export class DynamicRunnerManager implements AgentRunner {
       model: resolved.model ?? this.config.agent.config.model,
     };
 
-    // claude-code persistent モード: effort付きの専用RunnerManagerを作成
+    // claude-code 持久化模式：创建带 effort 的专用 RunnerManager
     if (resolved.backend === 'claude-code' && agentConfig.persistent) {
       return new RunnerManager(agentConfig, {
         maxProcesses: agentConfig.maxProcesses,
@@ -116,7 +108,7 @@ export class DynamicRunnerManager implements AgentRunner {
     const existing = this.channelRunners.get(channelId);
     if (existing) {
       existing.runner.destroy?.(channelId);
-      // RunnerManagerならshutdownも呼ぶ
+      // 如果是 RunnerManager，也调用 shutdown
       if (
         'shutdown' in existing.runner &&
         typeof (existing.runner as RunnerManager).shutdown === 'function'
@@ -124,26 +116,26 @@ export class DynamicRunnerManager implements AgentRunner {
         (existing.runner as RunnerManager).shutdown();
       }
       this.channelRunners.delete(channelId);
-      console.log(`[dynamic-runner] Destroyed channel runner for ${channelId}`);
+      console.log(`[dynamic-runner] 已销毁频道 ${channelId} 的运行器`);
     }
   }
 
   /**
-   * リクエストを実行
+   * 执行请求
    */
   async run(prompt: string, options?: RunOptions): Promise<RunResult> {
     const channelId = options?.channelId;
     const resolved = this.resolver.resolve(channelId);
     const runner = this.getRunner(channelId, resolved);
 
-    // effort をオプションに注入（per-request型のclaude-codeで使用）
+    // 将 effort 注入选项（用于 per-request 类型的 claude-code）
     const runOptions = resolved.effort ? { ...options, effort: resolved.effort } : options;
 
     return runner.run(prompt, runOptions);
   }
 
   /**
-   * ストリーミング実行
+   * 流式执行
    */
   async runStream(
     prompt: string,
@@ -160,7 +152,7 @@ export class DynamicRunnerManager implements AgentRunner {
   }
 
   /**
-   * キャンセル
+   * 取消
    */
   cancel(channelId?: string): boolean {
     if (channelId) {
@@ -173,39 +165,39 @@ export class DynamicRunnerManager implements AgentRunner {
   }
 
   /**
-   * 指定チャンネルのランナーを破棄
+   * 销毁指定频道的运行器
    */
   destroy(channelId: string): boolean {
-    // チャンネル専用ランナーがあれば破棄
+    // 如果有频道专用运行器则销毁
     const hadChannelRunner = this.channelRunners.has(channelId);
     this.destroyChannelRunner(channelId);
 
-    // デフォルトランナーにもdestroy（RunnerManagerのプール内エントリ削除）
+    // 也调用默认运行器的 destroy（删除 RunnerManager 池中的条目）
     const defaultDestroyed = this.defaultRunner.destroy?.(channelId) ?? false;
 
     return hadChannelRunner || defaultDestroyed;
   }
 
   /**
-   * バックエンド切り替え
-   * セッション削除とランナー破棄を行い、次回リクエスト時に新しいランナーが作成される
+   * 切换后端
+   * 删除会话并销毁运行器，下次请求时创建新的运行器
    */
   switchBackend(channelId: string): void {
     deleteSession(channelId);
     this.destroyChannelRunner(channelId);
     this.defaultRunner.destroy?.(channelId);
-    console.log(`[dynamic-runner] Backend switched for channel ${channelId}`);
+    console.log(`[dynamic-runner] 已为频道 ${channelId} 切换后端`);
   }
 
   /**
-   * チャンネルの現在のバックエンド設定を取得
+   * 获取频道当前的后端设置
    */
   resolveForChannel(channelId?: string): ResolvedBackend {
     return this.resolver.resolve(channelId);
   }
 
   /**
-   * プール状態の取得（デバッグ・ステータス表示用）
+   * 获取池状态（用于调试和状态显示）
    */
   getStatus(): {
     defaultBackend: string;
@@ -228,7 +220,7 @@ export class DynamicRunnerManager implements AgentRunner {
   }
 
   /**
-   * 全ランナーをシャットダウン
+   * 关闭所有运行器
    */
   shutdown(): void {
     for (const [channelId, entry] of this.channelRunners.entries()) {
