@@ -1,8 +1,8 @@
 /**
- * Discord REST API 直叩きモジュール
+ * 直接调用 Discord REST API 的模块
  *
- * xangiプロセスのDiscord.jsクライアントに依存せず、
- * REST APIで直接Discord操作を行う。
+ * 不依赖 xangi 进程的 Discord.js 客户端，
+ * 直接通过 REST API 进行 Discord 操作。
  */
 
 const API_BASE = 'https://discord.com/api/v10';
@@ -11,7 +11,7 @@ const MAX_MESSAGE_LENGTH = 2000;
 function getToken(): string {
   const token = process.env.DISCORD_TOKEN;
   if (!token) {
-    throw new Error('DISCORD_TOKEN environment variable is not set');
+    throw new Error('未设置 DISCORD_TOKEN 环境变量');
   }
   return token;
 }
@@ -33,7 +33,7 @@ async function discordFetch(path: string, options?: RequestInit): Promise<unknow
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Discord API error ${res.status}: ${body}`);
+    throw new Error(`Discord API 错误 ${res.status}: ${body}`);
   }
 
   // 204 No Content
@@ -41,7 +41,7 @@ async function discordFetch(path: string, options?: RequestInit): Promise<unknow
   return res.json();
 }
 
-// ─── Discord Message Type ───────────────────────────────────────────
+// ─── Discord 消息类型 ───────────────────────────────────────────
 
 interface DiscordMessage {
   id: string;
@@ -61,7 +61,7 @@ interface DiscordCommandContext {
   channelId?: string;
 }
 
-// ─── Commands ───────────────────────────────────────────────────────
+// ─── 命令 ───────────────────────────────────────────────────────
 
 function resolveHistoryChannelId(
   flags: Record<string, string>,
@@ -75,9 +75,9 @@ function resolveHistoryChannelId(
 
   throw new Error(
     [
-      'discord_history: channel が未指定です。',
-      'xangi上で実行中なら現在のチャンネルIDを自動補完します。',
-      'CLI単体実行では `--channel <チャンネルID>` を付けてください。',
+      'discord_history: 未指定 channel。',
+      '如果在 xangi 中运行，会自动补全当前频道 ID。',
+      '单独运行 CLI 时请添加 `--channel <频道ID>`。',
     ].join(' ')
   );
 }
@@ -93,7 +93,7 @@ async function discordHistory(
 
   let beforeId: string | undefined;
 
-  // offset指定時: まずoffset分のメッセージを取得してスキップ
+  // 指定 offset 时：先获取 offset 条消息作为跳过
   if (offset > 0) {
     const skipMessages = (await discordFetch(
       `/channels/${channelId}/messages?limit=${offset}`
@@ -110,18 +110,18 @@ async function discordHistory(
     `/channels/${channelId}/messages?${query}`
   )) as DiscordMessage[];
 
-  // 古い順にソート
+  // 按时间正序排序
   messages.reverse();
 
   const rangeStart = offset;
   const rangeEnd = offset + messages.length;
-  const offsetLabel = offset > 0 ? `${rangeStart}〜${rangeEnd}件目` : `最新${messages.length}件`;
+  const offsetLabel = offset > 0 ? `第 ${rangeStart}～${rangeEnd} 条` : `最新 ${messages.length} 条`;
 
   const lines = messages.map((m) => {
     const time = new Date(m.timestamp).toLocaleString('ja-JP', {
       timeZone: 'Asia/Tokyo',
     });
-    const content = (m.content || '(添付ファイルのみ)').slice(0, 200);
+    const content = (m.content || '(仅附件)').slice(0, 200);
     const attachments =
       m.attachments.length > 0
         ? '\n' + m.attachments.map((a) => `  📎 ${a.filename} ${a.url}`).join('\n')
@@ -129,16 +129,16 @@ async function discordHistory(
     return `[${time}] (ID:${m.id}) ${m.author.username}: ${content}${attachments}`;
   });
 
-  return `📺 チャンネル履歴（${offsetLabel}）:\n${lines.join('\n')}`;
+  return `📺 频道历史记录（${offsetLabel}）:\n${lines.join('\n')}`;
 }
 
 async function discordSend(flags: Record<string, string>): Promise<string> {
   const channelId = flags['channel'];
   const message = flags['message'];
-  if (!channelId) throw new Error('--channel is required');
-  if (!message) throw new Error('--message is required');
+  if (!channelId) throw new Error('--channel 是必需的');
+  if (!message) throw new Error('--message 是必需的');
 
-  // 2000文字制限に合わせて分割送信
+  // 按 2000 字符限制分割发送
   const chunks: string[] = [];
   for (let i = 0; i < message.length; i += MAX_MESSAGE_LENGTH) {
     chunks.push(message.slice(i, i + MAX_MESSAGE_LENGTH));
@@ -154,31 +154,31 @@ async function discordSend(flags: Record<string, string>): Promise<string> {
     });
   }
 
-  return `✅ メッセージを送信しました (${chunks.length} chunk(s))`;
+  return `✅ 消息已发送 (共 ${chunks.length} 段)`;
 }
 
 async function discordChannels(flags: Record<string, string>): Promise<string> {
   const guildId = flags['guild'];
-  if (!guildId) throw new Error('--guild is required');
+  if (!guildId) throw new Error('--guild 是必需的');
 
   const channels = (await discordFetch(`/guilds/${guildId}/channels`)) as DiscordChannel[];
 
-  // テキストチャンネルのみ (type 0)
+  // 仅文本频道 (type 0)
   const textChannels = channels
     .filter((c) => c.type === 0)
     .map((c) => `- #${c.name} (${c.id})`)
     .join('\n');
 
-  return `📺 チャンネル一覧:\n${textChannels}`;
+  return `📺 频道列表:\n${textChannels}`;
 }
 
 async function discordSearch(flags: Record<string, string>): Promise<string> {
   const channelId = flags['channel'];
   const keyword = flags['keyword'];
-  if (!channelId) throw new Error('--channel is required');
-  if (!keyword) throw new Error('--keyword is required');
+  if (!channelId) throw new Error('--channel 是必需的');
+  if (!keyword) throw new Error('--keyword 是必需的');
 
-  // Discord REST APIにはメッセージ検索がないため、最新100件を取得してフィルタ
+  // Discord REST API 没有消息搜索功能，因此获取最新 100 条并过滤
   const messages = (await discordFetch(
     `/channels/${channelId}/messages?limit=100`
   )) as DiscordMessage[];
@@ -186,7 +186,7 @@ async function discordSearch(flags: Record<string, string>): Promise<string> {
   const matched = messages.filter((m) => m.content.toLowerCase().includes(keyword.toLowerCase()));
 
   if (matched.length === 0) {
-    return `🔍 「${keyword}」に一致するメッセージが見つかりませんでした`;
+    return `🔍 未找到匹配「${keyword}」的消息`;
   }
 
   const results = matched
@@ -199,25 +199,25 @@ async function discordSearch(flags: Record<string, string>): Promise<string> {
     })
     .join('\n');
 
-  return `🔍 「${keyword}」の検索結果 (${matched.length}件):\n${results}`;
+  return `🔍 「${keyword}」的搜索结果 (共 ${matched.length} 条):\n${results}`;
 }
 
 async function discordEdit(flags: Record<string, string>): Promise<string> {
   const channelId = flags['channel'];
   const messageId = flags['message-id'];
   const content = flags['content'];
-  if (!channelId) throw new Error('--channel is required');
-  if (!messageId) throw new Error('--message-id is required');
-  if (!content) throw new Error('--content is required');
+  if (!channelId) throw new Error('--channel 是必需的');
+  if (!messageId) throw new Error('--message-id 是必需的');
+  if (!content) throw new Error('--content 是必需的');
 
-  // 自分のメッセージか確認
+  // 确认是否为 bot 自己的消息
   const botId = getBotId();
   if (botId) {
     const msg = (await discordFetch(
       `/channels/${channelId}/messages/${messageId}`
     )) as DiscordMessage;
     if (msg.author.id !== botId) {
-      return '❌ 自分のメッセージのみ編集できます';
+      return '❌ 只能编辑自己的消息';
     }
   }
 
@@ -226,23 +226,23 @@ async function discordEdit(flags: Record<string, string>): Promise<string> {
     body: JSON.stringify({ content }),
   });
 
-  return '✏️ メッセージを編集しました';
+  return '✏️ 消息已编辑';
 }
 
 async function discordDelete(flags: Record<string, string>): Promise<string> {
   const channelId = flags['channel'];
   const messageId = flags['message-id'];
-  if (!channelId) throw new Error('--channel is required');
-  if (!messageId) throw new Error('--message-id is required');
+  if (!channelId) throw new Error('--channel 是必需的');
+  if (!messageId) throw new Error('--message-id 是必需的');
 
-  // 自分のメッセージか確認
+  // 确认是否为 bot 自己的消息
   const botId = getBotId();
   if (botId) {
     const msg = (await discordFetch(
       `/channels/${channelId}/messages/${messageId}`
     )) as DiscordMessage;
     if (msg.author.id !== botId) {
-      return '❌ 自分のメッセージのみ削除できます';
+      return '❌ 只能删除自己的消息';
     }
   }
 
@@ -250,31 +250,31 @@ async function discordDelete(flags: Record<string, string>): Promise<string> {
     method: 'DELETE',
   });
 
-  return '🗑️ メッセージを削除しました';
+  return '🗑️ 消息已删除';
 }
 
 async function mediaSend(flags: Record<string, string>): Promise<string> {
   const channelId = flags['channel'];
   const filePath = flags['file'];
-  if (!channelId) throw new Error('--channel is required');
-  if (!filePath) throw new Error('--file is required');
+  if (!channelId) throw new Error('--channel 是必需的');
+  if (!filePath) throw new Error('--file 是必需的');
 
   const { readFileSync, existsSync } = await import('fs');
   const { basename } = await import('path');
 
   if (!existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
+    throw new Error(`文件未找到: ${filePath}`);
   }
 
   const fileName = basename(filePath);
   const fileData = readFileSync(filePath);
   const token = getToken();
 
-  // multipart/form-data で送信
+  // 使用 multipart/form-data 发送
   const boundary = '----XangiFormBoundary' + Date.now();
   const parts: Buffer[] = [];
 
-  // JSON payload part
+  // JSON payload 部分
   const jsonPayload = JSON.stringify({ content: '' });
   parts.push(
     Buffer.from(
@@ -282,7 +282,7 @@ async function mediaSend(flags: Record<string, string>): Promise<string> {
     )
   );
 
-  // File part
+  // 文件部分
   parts.push(
     Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="files[0]"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`
@@ -304,13 +304,13 @@ async function mediaSend(flags: Record<string, string>): Promise<string> {
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => '');
-    throw new Error(`Failed to upload file: ${res.status} ${errBody}`);
+    throw new Error(`上传文件失败: ${res.status} ${errBody}`);
   }
 
-  return `📎 ファイルを送信しました: ${fileName}`;
+  return `📎 文件已发送: ${fileName}`;
 }
 
-// ─── Router ─────────────────────────────────────────────────────────
+// ─── 路由器 ─────────────────────────────────────────────────────────
 
 export async function discordApi(
   command: string,
@@ -333,6 +333,6 @@ export async function discordApi(
     case 'media_send':
       return mediaSend(flags);
     default:
-      throw new Error(`Unknown discord command: ${command}`);
+      throw new Error(`未知的 discord 命令: ${command}`);
   }
 }
