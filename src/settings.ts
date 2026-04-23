@@ -13,25 +13,25 @@ let settingsPath: string | null = null;
 let cachedSettings: Settings | null = null;
 
 /**
- * settings.json のパスを初期化する
- * workdir（WORKSPACE_PATH）配下に保存
+ * 初始化 settings.json 的路径
+ * 保存在 workdir（WORKSPACE_PATH）目录下
  */
 export function initSettings(workdir: string): void {
   settingsPath = join(workdir, 'settings.json');
 }
 
 /**
- * settings.json のパスを取得
+ * 获取 settings.json 的路径
  */
 export function getSettingsPath(): string {
   if (!settingsPath) {
-    throw new Error('Settings not initialized. Call initSettings(workdir) first.');
+    throw new Error('设置未初始化。请先调用 initSettings(workdir)。');
   }
   return settingsPath;
 }
 
 /**
- * 設定を読み込む（キャッシュあり）
+ * 读取设置（带缓存）
  */
 export function loadSettings(): Settings {
   if (cachedSettings) return { ...cachedSettings };
@@ -45,14 +45,14 @@ export function loadSettings(): Settings {
     };
     return { ...cachedSettings };
   } catch {
-    // ファイルがない or パースエラー → デフォルト
+    // 文件不存在或解析错误 → 使用默认值
     cachedSettings = { ...DEFAULT_SETTINGS };
     return { ...cachedSettings };
   }
 }
 
 /**
- * 設定を保存する
+ * 保存设置
  */
 export function saveSettings(settings: Partial<Settings>): Settings {
   const current = loadSettings();
@@ -63,20 +63,20 @@ export function saveSettings(settings: Partial<Settings>): Settings {
   writeFileSync(path, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
 
   cachedSettings = merged;
-  console.log(`[xangi] Settings saved: ${JSON.stringify(merged)}`);
+  console.log(`[xangi] 设置已保存: ${JSON.stringify(merged)}`);
   return { ...merged };
 }
 
 /**
- * 設定をフォーマットして表示用文字列を返す
+ * 格式化设置，返回用于显示的字符串
  */
 export function formatSettings(settings: Settings): string {
-  const lines = ['⚙️ **現在の設定**', `- 自動再起動: ${settings.autoRestart ? '✅ ON' : '❌ OFF'}`];
+  const lines = ['⚙️ **当前设置**', `- 自动重启: ${settings.autoRestart ? '✅ 开启' : '❌ 关闭'}`];
   return lines.join('\n');
 }
 
 /**
- * キャッシュをクリア（テスト用）
+ * 清除缓存（用于测试）
  */
 export function clearSettingsCache(): void {
   cachedSettings = null;
