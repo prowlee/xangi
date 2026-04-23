@@ -1,52 +1,55 @@
-# 設計ドキュメント
+以下是该设计文档的中文翻译：
 
-xangiのアーキテクチャと設計思想について説明します。
+```markdown
+# 设计文档
 
-## 概要
+说明 xangi 的架构和设计思想。
 
-xangiは「AI CLI（Claude Code / Codex CLI / Gemini CLI）やローカルLLM（Ollama等）をチャットプラットフォームから使えるようにするラッパー」です。
+## 概述
+
+xangi 是一个“使得 AI CLI（Claude Code / Codex CLI / Gemini CLI）或本地 LLM（Ollama 等）能够从聊天平台使用的包装器”。
 
 ```
-User → Chat (Discord/Slack) → xangi → AI CLI → Workspace
+用户 → 聊天平台 (Discord/Slack) → xangi → AI CLI → 工作区
 ```
 
-## アーキテクチャ
+## 架构
 
 ```mermaid
 graph LR
-    User --> |メッセージ| Chat[Chat Platform<br/>Discord / Slack]
-    Chat --> |プロンプト| xangi
-    xangi --> |実行| CLI[AI Backend<br/>Claude Code / Codex<br/>Gemini CLI / Local LLM]
-    CLI --> |ファイル操作| WS[Workspace<br/>skills / AGENTS.md]
-    xangi --> |定期実行| Scheduler
-    Scheduler --> |プロンプト| CLI
+    User --> |消息| Chat[聊天平台<br/>Discord / Slack]
+    Chat --> |提示词| xangi
+    xangi --> |执行| CLI[AI 后端<br/>Claude Code / Codex<br/>Gemini CLI / 本地 LLM]
+    CLI --> |文件操作| WS[工作区<br/>skills / AGENTS.md]
+    xangi --> |定期执行| Scheduler
+    Scheduler --> |提示词| CLI
 ```
 
-### レイヤー構成
+### 层构成
 
-| レイヤー | 役割 | 実装 |
+| 层 | 职责 | 实现 |
 |----------|------|------|
-| Chat | ユーザーインターフェース | Discord.js, Slack Bolt |
-| xangi | AI CLIの統合・制御 | index.ts, agent-runner.ts, dynamic-runner.ts |
-| Backend Resolution | チャンネル別バックエンド解決 | backend-resolver.ts, settings.ts |
-| AI CLI | 実際のAI処理 | Claude Code, Codex CLI, Gemini CLI, Local LLM |
-| Workspace | ファイル・スキル | skills/, AGENTS.md |
+| 聊天平台 | 用户界面 | Discord.js, Slack Bolt |
+| xangi | AI CLI 的集成与控制 | index.ts, agent-runner.ts, dynamic-runner.ts |
+| 后端解析 | 按频道切换后端 | backend-resolver.ts, settings.ts |
+| AI CLI | 实际的 AI 处理 | Claude Code, Codex CLI, Gemini CLI, 本地 LLM |
+| 工作区 | 文件与技能 | skills/, AGENTS.md |
 
-## コンポーネント
+## 组件
 
-### エントリーポイント（index.ts）
+### 入口点（index.ts）
 
-メインのオーケストレーター。以下を統合：
+主协调器。集成以下功能：
 
-- Discord/Slackクライアントの初期化
-- メッセージ受信とルーティング
-- AI CLIの呼び出し
-- スケジューラーの管理
-- コマンド処理（`xangi-cmd` CLIツール経由 + テキストパース）
+- Discord/Slack 客户端的初始化
+- 消息接收与路由
+- AI CLI 的调用
+- 调度器的管理
+- 命令处理（通过 `xangi-cmd` CLI 工具 + 文本解析）
 
-### エージェントランナー（agent-runner.ts）
+### 代理运行器（agent-runner.ts）
 
-AI CLIを抽象化するインターフェース：
+抽象化 AI CLI 的接口：
 
 ```typescript
 interface AgentRunner {
@@ -55,94 +58,94 @@ interface AgentRunner {
 }
 ```
 
-### 動的ランナーマネージャー（dynamic-runner.ts）
+### 动态运行器管理器（dynamic-runner.ts）
 
-チャンネルごとにバックエンド・モデル・effortを動的に切り替えるラッパー：
+按频道动态切换后端、模型和 effort 的包装器：
 
 ```
-メッセージ受信
+接收消息
   → BackendResolver.resolve(channelId)
-  → { backend, model, effort } を取得
-  → DynamicRunnerManager が適切なランナーにルーティング
-  → 実行
+  → 获取 { backend, model, effort }
+  → DynamicRunnerManager 路由到适当的运行器
+  → 执行
 ```
 
-BackendResolverの優先順位:
-1. `/backend set` で設定されたchannelOverrides（メモリ上、`.env`のCHANNEL_OVERRIDESに永続化）
-2. `.env` のデフォルト（`AGENT_BACKEND`, `AGENT_MODEL`）
+BackendResolver 的优先级：
+1. 通过 `/backend set` 设置的 channelOverrides（内存中，持久化到 `.env` 的 `CHANNEL_OVERRIDES`）
+2. `.env` 的默认值（`AGENT_BACKEND`, `AGENT_MODEL`）
 
-### システムプロンプト（base-runner.ts）
+### 系统提示词（base-runner.ts）
 
-xangiがAI CLIに注入するシステムプロンプトを管理：
+管理 xangi 注入到 AI CLI 的系统提示词：
 
-- **チャットプラットフォーム情報** — Discord/Slack経由の会話であることを伝える短い固定テキスト
-- **XANGI_COMMANDS** — `src/prompts/` からプラットフォームに応じたコマンド仕様を注入
-  - 共通コマンド（`xangi-commands-common.ts`）: タイムアウト対策等
-  - チャットPF共通（`xangi-commands-chat-platform.ts`）: ファイル送信（MEDIA:）・セパレータ（===）・スケジュール・システムコマンド
-  - Discord専用（`xangi-commands-discord.ts`）: `xangi-cmd discord_*` CLIツール・自動展開
-  - Slack専用（`xangi-commands-slack.ts`）: Slack固有の操作
-  - プラットフォーム自動判別: Discordのみ有効なら Discord専用コマンドだけ注入（トークン節約）
-- **プラットフォーム識別** — 各メッセージに `[プラットフォーム: Discord]` or `[プラットフォーム: Slack]` を注入。AIが適切なコマンドを使い分け
+- **聊天平台信息** — 告知 AI 这是通过 Discord/Slack 进行的对话的简短固定文本
+- **XANGI_COMMANDS** — 从 `src/prompts/` 根据平台注入相应的命令规范
+  - 通用命令（`xangi-commands-common.ts`）：超时对策等
+  - 聊天平台通用（`xangi-commands-chat-platform.ts`）：文件发送（MEDIA:）、分隔符（===）、日程、系统命令
+  - Discord 专用（`xangi-commands-discord.ts`）：`xangi-cmd discord_*` CLI 工具、自动展开
+  - Slack 专用（`xangi-commands-slack.ts`）：Slack 特有的操作
+  - 平台自动判别：仅 Discord 启用时只注入 Discord 专用命令（节省 token）
+- **平台标识** — 为每条消息注入 `[平台: Discord]` 或 `[平台: Slack]`，让 AI 区分使用适当的命令
 
-AGENTS.md / CHARACTER.md / USER.md 等のワークスペース設定は、各AI CLIの自動読み込み機能に委譲：
+AGENTS.md / CHARACTER.md / USER.md 等工作区配置，委托给各 AI CLI 的自动加载功能：
 
-| CLI | 自動読み込みファイル | 注入方法 |
+| CLI | 自动加载文件 | 注入方式 |
 |-----|---------------------|----------|
-| Claude Code | `CLAUDE.md` | `--append-system-prompt`（一回限り） |
-| Codex CLI | `AGENTS.md` | `<system-context>` タグで埋め込み |
-| Gemini CLI | `GEMINI.md` | CLI側で自動読み込み（xangi側の注入なし） |
-| Local LLM | `AGENTS.md`, `MEMORY.md` | システムプロンプトに直接埋め込み（`CLAUDE.md` は通常 `AGENTS.md` のシンボリックリンクのため除外） |
+| Claude Code | `CLAUDE.md` | `--append-system-prompt`（一次性） |
+| Codex CLI | `AGENTS.md` | 通过 `<system-context>` 标签嵌入 |
+| Gemini CLI | `GEMINI.md` | CLI 侧自动加载（xangi 不注入） |
+| 本地 LLM | `AGENTS.md`, `MEMORY.md` | 直接嵌入系统提示词（`CLAUDE.md` 通常是 `AGENTS.md` 的符号链接，因此排除） |
 
-### AI CLIアダプター
+### AI CLI 适配器
 
-| ファイル | 対応CLI | 特徴 |
+| 文件 | 对应 CLI | 特点 |
 |----------|---------|------|
-| claude-code.ts | Claude Code | ストリーミング対応、セッション管理 |
-| persistent-runner.ts | Claude Code（常駐） | `--input-format=stream-json` で常駐プロセス化、キュー管理、サーキットブレーカー |
-| codex-cli.ts | Codex CLI | OpenAI製、0.98.0対応、cancel対応 |
-| gemini-cli.ts | Gemini CLI | Google製、セッション管理、ストリーミング対応 |
-| local-llm/runner.ts | Local LLM | Ollama等のローカルLLMを直接呼び出し、ツール実行・ストリーミング対応 |
+| claude-code.ts | Claude Code | 支持流式、会话管理 |
+| persistent-runner.ts | Claude Code（常驻） | 使用 `--input-format=stream-json` 实现常驻进程化、队列管理、断路器 |
+| codex-cli.ts | Codex CLI | OpenAI 出品，支持 0.98.0 版本、支持 cancel |
+| gemini-cli.ts | Gemini CLI | Google 出品，会话管理、支持流式 |
+| local-llm/runner.ts | 本地 LLM | 直接调用 Ollama 等本地 LLM，支持工具执行和流式 |
 
-#### Local LLMアダプターの詳細設計
+#### 本地 LLM 适配器详细设计
 
-**セッションリトライのフロー:**
+**会话重试流程：**
 
 ```
-1. ユーザーメッセージをセッション履歴に追加
+1. 将用户消息添加到会话历史
    ↓
-2. LLM APIにリクエスト送信
+2. 向 LLM API 发送请求
    ↓
-3a. 成功 → ツールループ or 最終応答を返却
-3b. エラー発生
+3a. 成功 → 返回工具循环或最终响应
+3b. 发生错误
    ↓
-4. isSessionRelatedError() でエラーを判定
+4. 通过 isSessionRelatedError() 判断错误类型
    - context length exceeded / too many tokens / max_tokens / context window
    - invalid message / malformed / 400 / 422
    ↓
-5a. セッション起因のエラー → セッションをクリア（最後のユーザーメッセージのみ保持）→ リトライ
-5b. セッション起因でない → formatLlmError() でユーザー向けメッセージを生成して返却
+5a. 会话相关错误 → 清除会话（仅保留最后一条用户消息）→ 重试
+5b. 非会话相关错误 → 通过 formatLlmError() 生成面向用户的错误消息并返回
    ↓
-6. リトライも失敗 → formatLlmError() でエラーメッセージを返却
+6. 重试也失败 → 通过 formatLlmError() 返回错误消息
 ```
 
-**エラーハンドリングの設計:**
+**错误处理设计：**
 
-- `isSessionRelatedError()` — Error インスタンスのメッセージを小文字化して、セッション履歴に起因する既知のパターンにマッチするか判定。非Errorオブジェクトは常にfalseを返す
-- `formatLlmError()` — 接続エラー・タイムアウト・認証エラー・レートリミット・サーバーエラーをそれぞれ日本語の分かりやすいメッセージに変換。非Errorオブジェクトにはデフォルトメッセージを返す
-- コンテキスト刈り込み（`trimSession()`）— ツール結果の切り詰め、メッセージ数制限（MAX_SESSION_MESSAGES）、合計文字数制限（CONTEXT_MAX_CHARS）を直近メッセージ保護付きで実行
+- `isSessionRelatedError()` — 将 Error 实例的消息转换为小写，判断是否匹配与会话历史相关的已知模式。非 Error 对象始终返回 false
+- `formatLlmError()` — 将连接错误、超时、认证错误、速率限制、服务器错误分别转换为易于理解的日文/中文消息。对于非 Error 对象返回默认消息
+- 上下文修剪（`trimSession()`）— 在保护最近消息的前提下，执行工具结果截断、消息数量限制（MAX_SESSION_MESSAGES）、总字符数限制（CONTEXT_MAX_CHARS）
 
-### スケジューラー（scheduler.ts）
+### 调度器（scheduler.ts）
 
-定期実行とリマインダーを管理：
+管理定时执行和提醒：
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Scheduler                                           │
+│ 调度器                                               │
 ├─────────────────────────────────────────────────────┤
-│ - schedules: Schedule[]     # スケジュールデータ     │
-│ - cronJobs: Map<id, CronJob> # 実行中のcronジョブ   │
-│ - senders: Map<platform, fn> # メッセージ送信関数   │
-│ - agentRunners: Map<platform, fn> # AI実行関数     │
+│ - schedules: Schedule[]     # 日程数据               │
+│ - cronJobs: Map<id, CronJob> # 正在执行的 cron 任务  │
+│ - senders: Map<platform, fn> # 消息发送函数          │
+│ - agentRunners: Map<platform, fn> # AI 执行函数     │
 ├─────────────────────────────────────────────────────┤
 │ + add(schedule): Schedule                          │
 │ + remove(id): boolean                              │
@@ -153,147 +156,147 @@ AGENTS.md / CHARACTER.md / USER.md 等のワークスペース設定は、各AI 
 └─────────────────────────────────────────────────────┘
 ```
 
-**スケジュールの種類:**
-- `cron`: cron式による定期実行
-- `once`: 単発リマインダー（指定時刻に1回実行）
+**日程类型：**
+- `cron`: 基于 cron 表达式的定时执行
+- `once`: 一次性提醒（在指定时间执行一次）
 
-**永続化:**
-- JSONファイル（`${DATA_DIR}/schedules.json`）
-- ファイル変更を監視して自動リロード（debounce付き）
+**持久化：**
+- JSON 文件（`${DATA_DIR}/schedules.json`）
+- 监听文件变化并自动重新加载（带防抖）
 
-**タイムゾーン:**
-- サーバーのシステムタイムゾーン（`TZ` 環境変数）に従う
-- Docker環境では `TZ=Asia/Tokyo` 等を設定推奨
+**时区：**
+- 遵循服务器的系统时区（`TZ` 环境变量）
+- 在 Docker 环境中，建议设置 `TZ=Asia/Tokyo` 等
 
-### Tool Server（tool-server.ts）
+### 工具服务器（tool-server.ts）
 
-AI CLIが xangi の機能（Discord操作・スケジュール・システム）を安全に呼び出すための HTTP API サーバー。
+为 AI CLI 提供调用 xangi 功能（Discord 操作、日程、系统）的 HTTP API 服务器。
 
 ```
-AI CLI（Claude Code等）
-  → xangi-cmd（シェルスクリプト）
+AI CLI（Claude Code 等）
+  → xangi-cmd（Shell 脚本）
   → HTTP POST http://localhost:<port>/api/execute
-  → tool-server（xangiプロセス内）
-  → Discord REST API / スケジューラー / 設定
+  → tool-server（xangi 进程内）
+  → Discord REST API / 调度器 / 设置
 ```
 
-**ポート管理:**
-- ポート0でバインド（OS自動割り当て、複数インスタンスでも競合なし）
-- 起動したURLを `XANGI_TOOL_SERVER` として子プロセスへ注入
-- `xangi-cmd` は `XANGI_TOOL_SERVER` を使って接続
-- 現在のチャンネルIDなどの実行文脈は HTTP リクエストの `context` に載せて tool-server へ渡す
+**端口管理：**
+- 绑定端口 0（操作系统自动分配，多实例无冲突）
+- 将启动后的 URL 作为 `XANGI_TOOL_SERVER` 注入子进程
+- `xangi-cmd` 使用 `XANGI_TOOL_SERVER` 进行连接
+- 当前频道 ID 等执行上下文通过 HTTP 请求的 `context` 字段传递给 tool-server
 
-**セキュリティ:**
-- DISCORD_TOKEN 等のシークレットは xangi プロセス内のみ
-- AI CLI には `safe-env.ts` のホワイトリストで安全な環境変数のみ渡す
-- Docker環境ではコンテナ分離により物理的にトークンへアクセス不可
+**安全性：**
+- DISCORD_TOKEN 等密钥仅存在于 xangi 进程内部
+- 通过 `safe-env.ts` 的白名单，仅向 AI CLI 传递安全的环境变量
+- 在 Docker 环境中，通过容器隔离使得物理上无法访问令牌
 
-### スキルシステム（skills.ts）
+### 技能系统（skills.ts）
 
-ワークスペースの `skills/` ディレクトリからスキルを読み込み、スラッシュコマンドとして登録。
+从工作区的 `skills/` 目录读取技能，并注册为斜杠命令。
 
 ```
 skills/
 ├── my-skill/
-│   ├── SKILL.md      # スキル定義
-│   └── scripts/      # 実行スクリプト
+│   ├── SKILL.md      # 技能定义
+│   └── scripts/      # 执行脚本
 └── another-skill/
     └── SKILL.md
 ```
 
-## データフロー
+## 数据流
 
-### メッセージ処理フロー
-
-```
-1. ユーザーがメッセージ送信
-   ↓
-2. Discord/Slackクライアントが受信
-   ↓
-3. 権限チェック（allowedUsers）
-   ↓
-4. 特殊コマンド判定
-   - /command → スラッシュコマンド処理
-   ↓
-5. チャンネル情報・発言者情報を付与
-   ↓
-6. AI CLIに転送（processPrompt）
-   ↓
-7. レスポンス処理
-   - ストリーミング表示
-   - ファイル添付抽出（MEDIA:パターン）
-   - SYSTEM_COMMAND検出
-   ↓
-8. ユーザーに返信
-```
-
-### スケジュール実行フロー
+### 消息处理流程
 
 ```
-1. cron/タイマーがトリガー
+1. 用户发送消息
+   ↓
+2. Discord/Slack 客户端接收
+   ↓
+3. 权限检查（allowedUsers）
+   ↓
+4. 特殊命令判定
+   - /command → 斜杠命令处理
+   ↓
+5. 附加频道信息、发言者信息
+   ↓
+6. 转发给 AI CLI（processPrompt）
+   ↓
+7. 响应处理
+   - 流式显示
+   - 提取文件附件（MEDIA: 模式）
+   - 检测 SYSTEM_COMMAND
+   ↓
+8. 回复用户
+```
+
+### 日程执行流程
+
+```
+1. cron/定时器触发
    ↓
 2. Scheduler.executeSchedule()
    ↓
 3. agentRunner(prompt, channelId)
-   - AI CLIでプロンプト実行
+   - 通过 AI CLI 执行提示词
    ↓
 4. sender(channelId, result)
-   - 結果をチャンネルに送信
+   - 将结果发送到频道
    ↓
-5. 単発の場合は自動削除
+5. 一次性任务自动删除
 ```
 
-## 設計思想
+## 设计思想
 
-### ユーザー管理
+### 用户管理
 
-xangiのユーザー管理はシンプルな許可リスト方式：
+xangi 的用户管理采用简单的白名单方式：
 
-- `DISCORD_ALLOWED_USER` / `SLACK_ALLOWED_USER` でアクセス制御
-- カンマ区切りで複数ユーザー指定可能、`*` で全員許可
-- セッションはチャンネル単位で管理
-- プロンプトに発言者情報（表示名・Discord ID）が自動注入される
+- 通过 `DISCORD_ALLOWED_USER` / `SLACK_ALLOWED_USER` 进行访问控制
+- 支持逗号分隔指定多个用户，`*` 表示允许所有人
+- 会话按频道单位进行管理
+- 发言者信息（显示名称、Discord ID）会自动注入到提示词中
 
-### AI CLIの抽象化
+### AI CLI 的抽象化
 
-AI CLIの実装詳細を隠蔽し、交換可能に：
+隐藏 AI CLI 的实现细节，使其可互换：
 
 ```typescript
-// 設定でバックエンドを切り替え
-AGENT_BACKEND=claude-code  # or codex or gemini or local-llm
+// 通过配置切换后端
+AGENT_BACKEND=claude-code  # 或 codex 或 gemini 或 local-llm
 ```
 
-将来的に新しいAI CLIが登場しても、アダプターを追加するだけで対応可能。
+即使将来出现新的 AI CLI，只需添加适配器即可支持。
 
-### コマンドの自律実行
+### 命令的自主执行
 
-AIが出力する特殊コマンドを検出して自動実行：
+检测 AI 输出的特殊命令并自动执行：
 
-| 方式 | コマンド例 | 動作 |
+| 方式 | 命令示例 | 动作 |
 |------|----------|------|
-| CLIツール | `xangi-cmd discord_send --channel ID --message "..."` | Discord操作 |
-| CLIツール | `xangi-cmd schedule_add --input "毎日 9:00 ..."` | スケジュール操作 |
-| CLIツール | `xangi-cmd system_restart` | プロセス再起動 |
-| テキストパース | `MEDIA:/path/to/file` | ファイル送信 |
-| テキストパース | `\n===\n` | メッセージ分割 |
+| CLI 工具 | `xangi-cmd discord_send --channel ID --message "..."` | Discord 操作 |
+| CLI 工具 | `xangi-cmd schedule_add --input "每天 9:00 ..."` | 日程操作 |
+| CLI 工具 | `xangi-cmd system_restart` | 进程重启 |
+| 文本解析 | `MEDIA:/path/to/file` | 发送文件 |
+| 文本解析 | `\n===\n` | 消息分割 |
 
-CLIツール（`xangi-cmd`）は xangi 内蔵の tool-server（HTTPエンドポイント）経由で実行される。
-DISCORD_TOKEN 等のシークレットは xangi プロセス内に閉じ込められ、AI CLI からはアクセスできない。
+CLI 工具（`xangi-cmd`）通过 xangi 内置的 tool-server（HTTP 端点）执行。
+DISCORD_TOKEN 等密钥被封闭在 xangi 进程内，AI CLI 无法访问。
 
-### 永続化戦略
+### 持久化策略
 
-| データ | 保存先 | 形式 |
+| 数据 | 保存位置 | 格式 |
 |--------|--------|------|
-| スケジュール | `${DATA_DIR}/schedules.json` | JSON |
-| ランタイム設定 | `${WORKSPACE}/settings.json` | JSON |
-| セッション | `${DATA_DIR}/sessions.json` | JSON（appSessionId方式、activeByContext + sessions） |
-| トランスクリプト | `logs/sessions/{appSessionId}.jsonl` | JSONL（セッション単位の会話ログ） |
+| 日程 | `${DATA_DIR}/schedules.json` | JSON |
+| 运行时设置 | `${WORKSPACE}/settings.json` | JSON |
+| 会话 | `${DATA_DIR}/sessions.json` | JSON（appSessionId 方式，activeByContext + sessions） |
+| 转录日志 | `logs/sessions/{appSessionId}.jsonl` | JSONL（按会话的对话日志） |
 
-### セッション管理
+### 会话管理
 
-xangi独自の `appSessionId` でセッションを管理。backendの `providerSessionId`（Claude Code等）は後付けで保存。
+使用 xangi 独有的 `appSessionId` 管理会话。后端的 `providerSessionId`（如 Claude Code 的）事后附加保存。
 
-**sessions.json の構造：**
+**sessions.json 的结构：**
 ```json
 {
   "activeByContext": { "<contextKey>": "<appSessionId>" },
@@ -309,124 +312,125 @@ xangi独自の `appSessionId` でセッションを管理。backendの `provider
 }
 ```
 
-### トランスクリプトログ
+### 转录日志
 
-セッション単位のAI会話ログをJSONL形式で自動保存。デバッグ・障害分析・WebUI閲覧に使用。
+将会话单位的 AI 对话日志自动保存为 JSONL 格式。用于调试、故障分析、Web UI 浏览。
 
-**ディレクトリ構成：**
+**目录结构：**
 ```
 logs/sessions/
-  m4abc123_def456.jsonl   # セッション単位のログ
+  m4abc123_def456.jsonl   # 会话单位的日志
   m4xyz789_ghi012.jsonl
 ```
 
-**記録される内容：**
-- `user`: ユーザーから送信されたプロンプト
-- `assistant`: AI の最終応答
-- `error`: タイムアウト、API エラーなど
+**记录的内容：**
+- `user`: 用户发送的提示词
+- `assistant`: AI 的最终响应
+- `error`: 超时、API 错误等
 
-**注意事項：**
-- ログは `.gitignore` で除外されている
-- 自動ローテーション（日付ごとにディレクトリ分割）
-- ログ書き込み失敗は無視（本体の動作に影響させない）
+**注意事项：**
+- 日志已被 `.gitignore` 排除
+- 自动轮换（按日期分割目录）
+- 日志写入失败时忽略（不影响主体运行）
 
-## ファイル構成
+## 文件结构
 
 ```
 bin/
-└── xangi-cmd           # CLIラッパー（シェルスクリプト、tool-serverに中継）
+└── xangi-cmd           # CLI 包装器（Shell 脚本，中继到 tool-server）
 
 src/
-├── index.ts            # エントリーポイント、Discord統合
-├── slack.ts            # Slack統合
-├── agent-runner.ts     # AI CLIインターフェース
-├── base-runner.ts      # システムプロンプト生成
-├── claude-code.ts      # Claude Codeアダプター（per-request）
-├── persistent-runner.ts # Claude Codeアダプター（常駐プロセス）
-├── codex-cli.ts        # Codex CLIアダプター
-├── gemini-cli.ts       # Gemini CLIアダプター
-├── web-chat.ts         # WebチャットUI（HTTPサーバー）
-├── tool-server.ts      # Tool Server（AI CLI向けHTTP API）
-├── approval-server.ts  # 承認サーバー（危険コマンド検知・対話的承認）
-├── safe-env.ts         # 環境変数ホワイトリスト
-├── cli/                # CLIモジュール（tool-serverから呼ばれる）
-│   ├── discord-api.ts  #   Discord REST API直叩き
-│   ├── schedule-cmd.ts #   スケジュール操作
-│   ├── system-cmd.ts   #   システム操作
-│   └── xangi-cmd.ts    #   Node.js版CLIエントリーポイント
-├── local-llm/          # Local LLMアダプター
-│   ├── runner.ts       #   メインランナー（セッション管理・ツール実行ループ）
-│   ├── llm-client.ts   #   LLM APIクライアント（Ollama native + OpenAI互換）
-│   ├── context.ts      #   ワークスペースコンテキスト読み込み
-│   ├── tools.ts        #   ビルトインツール（exec/read/web_fetch）
-│   ├── xangi-tools.ts  #   xangi専用ツール（function calling版）
-│   └── types.ts        #   型定義
-├── prompts/            # プロンプト定義
-│   ├── xangi-commands.ts          # プラットフォーム別組み立て
-│   ├── xangi-commands-common.ts   # 共通（タイムアウト等）
-│   ├── xangi-commands-chat-platform.ts # チャットPF共通（MEDIA:/スケジュール/システム）
-│   ├── xangi-commands-discord.ts  # Discord専用（xangi-cmd discord_*）
-│   └── xangi-commands-slack.ts    # Slack専用
-├── scheduler.ts        # スケジューラー
-├── skills.ts           # スキルローダー
-├── config.ts           # 設定読み込み
-├── settings.ts         # ランタイム設定
-├── sessions.ts         # セッション管理
-├── file-utils.ts       # ファイル操作ユーティリティ
-├── process-manager.ts  # プロセス管理
-├── runner-manager.ts   # 複数チャンネル同時処理（RunnerManager）
-└── transcript-logger.ts # セッション単位トランスクリプトログ
+├── index.ts            # 入口点、Discord 集成
+├── slack.ts            # Slack 集成
+├── agent-runner.ts     # AI CLI 接口
+├── base-runner.ts      # 系统提示词生成
+├── claude-code.ts      # Claude Code 适配器（per-request）
+├── persistent-runner.ts # Claude Code 适配器（常驻进程）
+├── codex-cli.ts        # Codex CLI 适配器
+├── gemini-cli.ts       # Gemini CLI 适配器
+├── web-chat.ts         # Web 聊天 UI（HTTP 服务器）
+├── tool-server.ts      # 工具服务器（面向 AI CLI 的 HTTP API）
+├── approval-server.ts  # 审批服务器（危险命令检测、交互式审批）
+├── safe-env.ts         # 环境变量白名单
+├── cli/                # CLI 模块（由 tool-server 调用）
+│   ├── discord-api.ts  #   直接调用 Discord REST API
+│   ├── schedule-cmd.ts #   日程操作
+│   ├── system-cmd.ts   #   系统操作
+│   └── xangi-cmd.ts    #   Node.js 版 CLI 入口点
+├── local-llm/          # 本地 LLM 适配器
+│   ├── runner.ts       #   主运行器（会话管理、工具执行循环）
+│   ├── llm-client.ts   #   LLM API 客户端（Ollama native + OpenAI 兼容）
+│   ├── context.ts      #   工作区上下文加载
+│   ├── tools.ts        #   内置工具（exec/read/web_fetch）
+│   ├── xangi-tools.ts  #   xangi 专用工具（function calling 版）
+│   └── types.ts        #   类型定义
+├── prompts/            # 提示词定义
+│   ├── xangi-commands.ts          # 按平台组装
+│   ├── xangi-commands-common.ts   # 通用（超时等）
+│   ├── xangi-commands-chat-platform.ts # 聊天平台通用（MEDIA:/日程/系统）
+│   ├── xangi-commands-discord.ts  # Discord 专用（xangi-cmd discord_*）
+│   └── xangi-commands-slack.ts    # Slack 专用
+├── scheduler.ts        # 调度器
+├── skills.ts           # 技能加载器
+├── config.ts           # 配置加载
+├── settings.ts         # 运行时设置
+├── sessions.ts         # 会话管理
+├── file-utils.ts       # 文件操作工具
+├── process-manager.ts  # 进程管理
+├── runner-manager.ts   # 多频道同时处理（RunnerManager）
+└── transcript-logger.ts # 按会话的转录日志
 ```
 
-## Docker構成
+## Docker 构成
 
-### コンテナ構成
+### 容器构成
 
 ```
 ┌─────────────────────────────────────────┐
-│ xangi-max / xangi-gpu container         │
+│ xangi-max / xangi-gpu 容器              │
 ├─────────────────────────────────────────┤
 │ - Node.js 22 + AI CLI + uv + Python    │
-│ - xangi-gpu はさらに CUDA + PyTorch    │
+│ - xangi-gpu 还包含 CUDA + PyTorch      │
 └───────────────┬─────────────────────────┘
                 │ docker network
 ┌───────────────▼─────────────────────────┐
-│ ollama container                        │
+│ ollama 容器                              │
 ├─────────────────────────────────────────┤
-│ - Ollama公式イメージ                     │
-│ - GPU パススルー                         │
-│ - ollama:11434 で接続                   │
+│ - Ollama 官方镜像                        │
+│ - GPU 直通                              │
+│ - 通过 ollama:11434 连接               │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
-│ llama-server container（オプション）     │
+│ llama-server 容器（可选）                │
 ├─────────────────────────────────────────┤
-│ - llama.cpp 公式イメージ                 │
-│ - GPU パススルー                         │
-│ - llama-server:18080 で接続             │
+│ - llama.cpp 官方镜像                    │
+│ - GPU 直通                              │
+│ - 通过 llama-server:18080 连接         │
 └─────────────────────────────────────────┘
 ```
 
-### セキュリティ方針
+### 安全策略
 
-- 非rootユーザー（UID 1000）で実行
-- ワークスペースのみマウント
-- AIエージェントへの環境変数はホワイトリスト方式で制限（`src/safe-env.ts`）
-- ホストネットワークへの直接アクセスなし（ollamaコンテナ経由のみ）
+- 以非 root 用户（UID 1000）执行
+- 仅挂载工作区
+- 传递给 AI 代理的环境变量通过白名单方式限制（`src/safe-env.ts`）
+- 无法直接访问主机网络（仅通过 ollama 容器）
 
-詳細（環境変数一覧・Docker操作方法等）は [使い方ガイド](usage.md) を参照。
+详细内容（环境变量列表、Docker 操作方法等）请参考 [使用指南](usage.md)。
 
-## 拡張ポイント
+## 扩展点
 
-### 新しいチャットプラットフォーム追加
+### 添加新的聊天平台
 
-1. クライアント初期化コードを追加
-2. メッセージハンドラを実装
-3. `scheduler.registerSender()` で送信関数を登録
-4. `scheduler.registerAgentRunner()` でAI実行関数を登録
+1. 添加客户端初始化代码
+2. 实现消息处理器
+3. 通过 `scheduler.registerSender()` 注册发送函数
+4. 通过 `scheduler.registerAgentRunner()` 注册 AI 执行函数
 
-### 新しいAI CLI追加
+### 添加新的 AI CLI
 
-1. `AgentRunner` インターフェースを実装
-2. `config.ts` にバックエンド設定を追加
-3. `index.ts` で初期化処理を追加
+1. 实现 `AgentRunner` 接口
+2. 在 `config.ts` 中添加后端配置
+3. 在 `index.ts` 中添加初始化处理
+```
