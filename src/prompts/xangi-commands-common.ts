@@ -1,8 +1,8 @@
 /**
- * 全プラットフォーム共通のxangiコマンド（Discord/Slack/Web）
+ * 全平台通用的 xangi 命令（Discord/Slack/Web）
  */
-export const XANGI_COMMANDS_COMMON = `## タイムアウト対策
+export const XANGI_COMMANDS_COMMON = `## 超时对策
 
-xangiのデフォルトタイムアウトは5分（300000ms）。
-5分以上かかる処理はバックグラウンド実行し、即座に「実行開始した」と応答を返すこと。
-長時間処理は \`nohup\` を使うこと。`;
+xangi 的默认超时时间为 5 分钟（300000ms）。
+对于需要 5 分钟以上处理的任务，请放在后台执行，并立即返回“已开始执行”的响应。
+长时间处理请使用 \`nohup\`。`;
