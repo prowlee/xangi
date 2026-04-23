@@ -1,60 +1,60 @@
 /**
- * Discord操作コマンド（xangi-cmd CLIツール版）
+ * Discord 操作命令（xangi-cmd CLI 工具版）
  *
- * Discord固有の操作のみ。スケジュール・システム操作はchat-platform共通。
+ * 仅限 Discord 特有的操作。日程、系统操作请使用聊天平台通用命令。
  */
-export const XANGI_COMMANDS_DISCORD = `## Discord操作
+export const XANGI_COMMANDS_DISCORD = `## Discord 操作
 
-Discord操作は **Bashツールで \`xangi-cmd\` を実行** して行う。
+Discord 操作通过 **Bash 工具执行 \`xangi-cmd\`** 来完成。
 
-### チャンネル履歴の取得
-
-\`\`\`bash
-xangi-cmd discord_history --count <件数> --offset <N>
-xangi-cmd discord_history --channel <チャンネルID> --count <件数> --offset <N>
-\`\`\`
-
-結果は標準出力に返る（Discordには送信されない）。
-件数省略時はデフォルト10件、最大100件。offset で古いメッセージに遡れる。
-\`--channel\` を省略した場合、xangi上で実行中なら現在のチャンネルを使う。CLI単体実行では \`--channel\` が必要。
-
-### 別チャンネルにメッセージ送信
+### 获取频道历史记录
 
 \`\`\`bash
-xangi-cmd discord_send --channel <チャンネルID> --message "メッセージ内容"
+xangi-cmd discord_history --count <数量> --offset <偏移量>
+xangi-cmd discord_history --channel <频道ID> --count <数量> --offset <偏移量>
 \`\`\`
 
-### チャンネル一覧
+结果返回到标准输出（不会发送到 Discord）。
+省略数量时默认为 10 条，最大 100 条。使用 offset 可以回溯更早的消息。
+省略 \`--channel\` 时，如果在 xangi 中运行，则使用当前频道。单独在 CLI 执行时需要 \`--channel\`。
+
+### 向其他频道发送消息
 
 \`\`\`bash
-xangi-cmd discord_channels --guild <サーバーID>
+xangi-cmd discord_send --channel <频道ID> --message "消息内容"
 \`\`\`
 
-### メッセージ検索
+### 频道列表
 
 \`\`\`bash
-xangi-cmd discord_search --channel <チャンネルID> --keyword "キーワード"
+xangi-cmd discord_channels --guild <服务器ID>
 \`\`\`
 
-### メッセージ編集
+### 搜索消息
 
 \`\`\`bash
-xangi-cmd discord_edit --channel <チャンネルID> --message-id <メッセージID> --content "新しい内容"
+xangi-cmd discord_search --channel <频道ID> --keyword "关键词"
 \`\`\`
 
-### メッセージ削除
+### 编辑消息
 
 \`\`\`bash
-xangi-cmd discord_delete --channel <チャンネルID> --message-id <メッセージID>
+xangi-cmd discord_edit --channel <频道ID> --message-id <消息ID> --content "新内容"
 \`\`\`
 
-### ファイル送信
+### 删除消息
 
 \`\`\`bash
-xangi-cmd media_send --channel <チャンネルID> --file /path/to/file
+xangi-cmd discord_delete --channel <频道ID> --message-id <消息ID>
 \`\`\`
 
-## 自動展開機能（読み取り専用）
+### 发送文件
 
-- \`https://discord.com/channels/.../...\` リンク → リンク先メッセージの内容を展開
-- \`<#channelId>\` → そのチャンネルの最新10件を展開`;
+\`\`\`bash
+xangi-cmd media_send --channel <频道ID> --file /path/to/file
+\`\`\`
+
+## 自动展开功能（只读）
+
+- \`https://discord.com/channels/.../...\` 链接 → 展开链接指向的消息内容
+- \`<#channelId>\` → 展开该频道的最新 10 条消息`;
