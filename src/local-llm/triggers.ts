@@ -1,8 +1,8 @@
 /**
- * Triggers — chatモードでマジックワードによる機能発動
+ * Triggers — 在 chat 模式下通过魔法词触发功能
  *
- * ワークスペースの triggers/ ディレクトリから trigger.yaml を読み込み、
- * LLM応答テキストからトリガーワードを検出して handler スクリプトを実行する。
+ * 从工作区的 triggers/ 目录读取 trigger.yaml，
+ * 从 LLM 响应文本中检测触发词并执行 handler 脚本。
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,13 +15,13 @@ export interface Trigger {
   name: string;
   description: string;
   handler: string;
-  /** trigger.yaml が存在するディレクトリの絶対パス */
+  /** trigger.yaml 所在目录的绝对路径 */
   path: string;
 }
 
 /**
- * ワークスペースの triggers/ ディレクトリをスキャンして trigger 定義を読み込む。
- * triggers/ が存在しない場合は空配列を返す。
+ * 扫描工作区的 triggers/ 目录并读取 trigger 定义。
+ * 如果 triggers/ 目录不存在，则返回空数组。
  */
 export function loadTriggers(workdir: string): Trigger[] {
   const triggersDir = join(workdir, 'triggers');
@@ -49,7 +49,7 @@ export function loadTriggers(workdir: string): Trigger[] {
       const parsed = parseYaml(content) as Record<string, unknown>;
 
       if (!parsed.name || !parsed.handler) {
-        console.warn(`[triggers] Invalid trigger.yaml in ${entry}: missing required fields`);
+        console.warn(`[triggers] ${entry} 中的 trigger.yaml 无效：缺少必要字段`);
         continue;
       }
 
@@ -60,10 +60,10 @@ export function loadTriggers(workdir: string): Trigger[] {
         path: entryPath,
       });
 
-      console.log(`[triggers] Loaded: ${parsed.name}`);
+      console.log(`[triggers] 已加载: ${parsed.name}`);
     } catch (err) {
       console.warn(
-        `[triggers] Failed to parse ${yamlPath}: ${err instanceof Error ? err.message : String(err)}`
+        `[triggers] 解析 ${yamlPath} 失败: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }
@@ -72,8 +72,8 @@ export function loadTriggers(workdir: string): Trigger[] {
 }
 
 /**
- * トリガーの handler スクリプトを実行して結果を返す。
- * handler はワークスペースルートを cwd として実行される。
+ * 执行触发器的 handler 脚本并返回结果。
+ * handler 以工作区根目录作为 cwd 执行。
  */
 export function executeTrigger(
   trigger: Trigger,
@@ -95,8 +95,8 @@ export function executeTrigger(
       (error, stdout, stderr) => {
         if (error) {
           const errMsg = stderr || error.message;
-          console.error(`[triggers] Handler ${trigger.name} failed: ${errMsg}`);
-          resolve({ success: false, output: `Error: ${errMsg}` });
+          console.error(`[triggers] 触发器 ${trigger.name} 执行失败: ${errMsg}`);
+          resolve({ success: false, output: `错误: ${errMsg}` });
         } else {
           resolve({ success: true, output: stdout });
         }
@@ -106,8 +106,8 @@ export function executeTrigger(
 }
 
 /**
- * トリガーをToolHandlerに変換する（ツールモード用）。
- * LLMがfunction callingでトリガーを呼び出せるようにする。
+ * 将触发器转换为 ToolHandler（用于工具模式）。
+ * 使 LLM 可以通过 function calling 调用触发器。
  */
 export function triggersToToolHandlers(
   triggers: Trigger[],
@@ -115,11 +115,11 @@ export function triggersToToolHandlers(
 ): import('./types.js').ToolHandler[] {
   return triggers.map((t) => ({
     name: t.name,
-    description: t.description || `Execute ${t.name} trigger`,
+    description: t.description || `执行 ${t.name} 触发器`,
     parameters: {
       type: 'object' as const,
       properties: {
-        args: { type: 'string', description: 'Arguments to pass to the trigger handler' },
+        args: { type: 'string', description: '传递给触发器处理器的参数' },
       },
       required: [] as string[],
     },
