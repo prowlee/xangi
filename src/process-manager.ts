@@ -1,20 +1,20 @@
 import type { ChildProcess } from 'child_process';
 
 /**
- * チャンネルごとの実行中プロセスを管理
+ * 管理每个频道正在执行的进程
  */
 class ProcessManager {
   private processes = new Map<string, ChildProcess>();
 
   /**
-   * プロセスを登録
+   * 注册进程
    */
   register(channelId: string, proc: ChildProcess): void {
-    // 既存のプロセスがあれば先にkill
+    // 如果已存在进程，先终止它
     this.stop(channelId);
     this.processes.set(channelId, proc);
 
-    // プロセス終了時に自動削除
+    // 进程结束时自动删除
     proc.on('close', () => {
       if (this.processes.get(channelId) === proc) {
         this.processes.delete(channelId);
@@ -23,8 +23,8 @@ class ProcessManager {
   }
 
   /**
-   * プロセスを停止
-   * @returns true if process was running and stopped
+   * 停止进程
+   * @returns 如果进程正在运行且已停止则返回 true
    */
   stop(channelId: string): boolean {
     const proc = this.processes.get(channelId);
@@ -37,7 +37,7 @@ class ProcessManager {
   }
 
   /**
-   * プロセスが実行中かどうか
+   * 检查进程是否正在运行
    */
   isRunning(channelId: string): boolean {
     const proc = this.processes.get(channelId);
@@ -45,7 +45,7 @@ class ProcessManager {
   }
 
   /**
-   * すべてのプロセスを停止
+   * 停止所有进程
    */
   stopAll(): void {
     for (const [channelId] of this.processes) {
@@ -54,5 +54,5 @@ class ProcessManager {
   }
 }
 
-// シングルトン
+// 单例模式
 export const processManager = new ProcessManager();
