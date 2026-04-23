@@ -1,5 +1,5 @@
 /**
- * OpenAI互換 + Ollama ネイティブAPI 対応 LLMクライアント
+ * OpenAI 兼容 + Ollama 原生 API 支持的 LLM 客户端
  */
 import type { LLMMessage, LLMToolCall, LLMChatOptions, LLMChatResponse } from './types.js';
 
@@ -38,7 +38,7 @@ function toOpenAIMessages(messages: LLMMessage[], isOllama: boolean): OpenAIMess
   return messages.map((msg) => {
     const m: OpenAIMessage = { role: msg.role, content: msg.content };
 
-    // マルチモーダル: 画像がある場合はcontent配列形式にする（OpenAI互換API向け）
+    // 多模态：如果有图片，则转换为 content 数组格式（用于 OpenAI 兼容 API）
     if (msg.images && msg.images.length > 0 && !isOllama) {
       const parts: OpenAIContentPart[] = [];
       if (msg.content) {
@@ -102,7 +102,7 @@ export class LLMClient {
         role: msg.role,
         content: msg.content,
       };
-      // Ollama形式: images フィールドにbase64画像を配列で渡す
+      // Ollama 格式：将 base64 图片作为 images 字段的数组传递
       if (msg.images && msg.images.length > 0) {
         m.images = msg.images.map((img) => img.base64);
       }
@@ -151,7 +151,7 @@ export class LLMClient {
     }
 
     if (!response.ok) {
-      throw new Error(`Ollama API error ${response.status}: ${await response.text()}`);
+      throw new Error(`Ollama API 错误 ${response.status}: ${await response.text()}`);
     }
 
     const data = (await response.json()) as {
@@ -220,7 +220,7 @@ export class LLMClient {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-    // 外部からのAbortSignalも連携
+    // 同时连接外部的 AbortSignal
     if (options?.signal) {
       options.signal.addEventListener('abort', () => controller.abort());
     }
@@ -237,12 +237,12 @@ export class LLMClient {
     }
 
     if (!response.ok) {
-      throw new Error(`LLM API error ${response.status}: ${await response.text()}`);
+      throw new Error(`LLM API 错误 ${response.status}: ${await response.text()}`);
     }
 
     const data = (await response.json()) as OpenAIChatResponse;
     const choice = data.choices[0];
-    if (!choice) throw new Error('No choices in LLM response');
+    if (!choice) throw new Error('LLM 响应中没有 choices');
 
     const toolCalls: LLMToolCall[] = [];
     if (choice.message.tool_calls) {
@@ -265,7 +265,7 @@ export class LLMClient {
     if (choice.finish_reason === 'tool_calls') finishReason = 'tool_calls';
     else if (choice.finish_reason === 'length') finishReason = 'length';
 
-    // Thinking model: content が空で reasoning に推論が入ることがある
+    // Thinking 模型：content 为空时，推理内容可能放在 reasoning 中
     let content = choice.message.content ?? '';
     if (!content && choice.message.reasoning) {
       content = choice.message.reasoning;
@@ -279,7 +279,7 @@ export class LLMClient {
   }
 
   async *chatStream(messages: LLMMessage[], options?: LLMChatOptions): AsyncGenerator<string> {
-    // Thinking model + Ollama → ネイティブAPIでストリーミング（think:false対応）
+    // Thinking 模型 + Ollama → 使用原生 API 流式传输（支持 think:false）
     if (!this.thinking && this.isOllamaUrl()) {
       yield* this.chatStreamOllamaNative(messages, options);
       return;
@@ -311,10 +311,10 @@ export class LLMClient {
     });
 
     if (!response.ok) {
-      throw new Error(`LLM API error ${response.status}: ${await response.text()}`);
+      throw new Error(`LLM API 错误 ${response.status}: ${await response.text()}`);
     }
 
-    if (!response.body) throw new Error('No response body for streaming');
+    if (!response.body) throw new Error('流式响应没有响应体');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -344,7 +344,7 @@ export class LLMClient {
                 yield delta.content;
               }
             } catch {
-              // skip malformed chunks
+              // 跳过格式错误的数据块
             }
           }
         }
@@ -353,7 +353,7 @@ export class LLMClient {
       reader.releaseLock();
     }
 
-    // Thinking model でcontentが空だった場合、non-streamingにフォールバック
+    // 如果 Thinking 模型且 content 为空，回退到非流式请求
     if (!hasContent) {
       const result = await this.chat(messages, options);
       if (result.content) yield result.content;
@@ -361,7 +361,7 @@ export class LLMClient {
   }
 
   /**
-   * Ollama ネイティブ API (/api/chat) でストリーミング（think:false対応）
+   * Ollama 原生 API (/api/chat) 流式传输（支持 think:false）
    */
   private async *chatStreamOllamaNative(
     messages: LLMMessage[],
@@ -402,10 +402,10 @@ export class LLMClient {
     });
 
     if (!response.ok) {
-      throw new Error(`Ollama API error ${response.status}: ${await response.text()}`);
+      throw new Error(`Ollama API 错误 ${response.status}: ${await response.text()}`);
     }
 
-    if (!response.body) throw new Error('No response body for streaming');
+    if (!response.body) throw new Error('流式响应没有响应体');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -431,7 +431,7 @@ export class LLMClient {
               yield chunk.message.content;
             }
           } catch {
-            // skip malformed chunks
+            // 跳过格式错误的数据块
           }
         }
       }
