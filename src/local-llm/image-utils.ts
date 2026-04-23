@@ -1,13 +1,13 @@
 /**
- * 画像処理ユーティリティ（Local LLMマルチモーダル対応）
+ * 图像处理工具（本地 LLM 多模态支持）
  */
 import fs from 'fs';
 import path from 'path';
 
-/** サポートする画像拡張子 */
+/** 支持的图片扩展名 */
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
 
-/** 拡張子→MIMEタイプのマッピング */
+/** 扩展名 → MIME 类型映射 */
 const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -17,7 +17,7 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 /**
- * ファイルパスが画像ファイルかどうかを判定
+ * 判断文件路径是否为图片文件
  */
 export function isImageFile(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
@@ -25,7 +25,7 @@ export function isImageFile(filePath: string): boolean {
 }
 
 /**
- * ファイル拡張子からMIMEタイプを取得
+ * 根据文件扩展名获取 MIME 类型
  */
 export function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -33,13 +33,13 @@ export function getMimeType(filePath: string): string {
 }
 
 /**
- * 画像ファイルをbase64エンコードして読み込む
- * @returns base64エンコードされた画像データ、またはファイルが存在しない/読めない場合はnull
+ * 读取图片文件并编码为 base64
+ * @returns base64 编码的图片数据，若文件不存在或无法读取则返回 null
  */
 export function encodeImageToBase64(filePath: string): string | null {
   try {
     if (!fs.existsSync(filePath)) {
-      console.warn(`[local-llm] Image file not found: ${filePath}`);
+      console.warn(`[local-llm] 图片文件不存在: ${filePath}`);
       return null;
     }
 
@@ -47,15 +47,15 @@ export function encodeImageToBase64(filePath: string): string | null {
     return buffer.toString('base64');
   } catch (err) {
     console.warn(
-      `[local-llm] Failed to read image file: ${filePath}: ${err instanceof Error ? err.message : String(err)}`
+      `[local-llm] 读取图片文件失败: ${filePath}: ${err instanceof Error ? err.message : String(err)}`
     );
     return null;
   }
 }
 
 /**
- * プロンプトから「[添付ファイル]」セクションのファイルパスを抽出
- * @returns { imagePaths: 画像ファイルパス[], otherPaths: 非画像ファイルパス[], cleanPrompt: 添付ファイルセクションを除去したプロンプト }
+ * 从提示词中提取「[附件]」部分的文件路径
+ * @returns { imagePaths: 图片文件路径列表, otherPaths: 非图片文件路径列表, cleanPrompt: 移除附件部分后的提示词 }
  */
 export function extractAttachmentPaths(prompt: string): {
   imagePaths: string[];
@@ -65,8 +65,8 @@ export function extractAttachmentPaths(prompt: string): {
   const imagePaths: string[] = [];
   const otherPaths: string[] = [];
 
-  // [添付ファイル] セクションを検出
-  const attachmentMatch = prompt.match(/\n\n\[添付ファイル\]\n([\s\S]*?)$/);
+  // 检测 [附件] 部分
+  const attachmentMatch = prompt.match(/\n\n\[附件\]\n([\s\S]*?)$/);
   if (!attachmentMatch) {
     return { imagePaths, otherPaths, cleanPrompt: prompt };
   }
@@ -74,7 +74,7 @@ export function extractAttachmentPaths(prompt: string): {
   const fileListText = attachmentMatch[1];
   const cleanPrompt = prompt.slice(0, attachmentMatch.index).trim();
 
-  // 各行からファイルパスを抽出（ "  - /path/to/file" 形式）
+  // 从每行提取文件路径（格式："  - /path/to/file"）
   const lines = fileListText.split('\n');
   for (const line of lines) {
     const pathMatch = line.match(/^\s+-\s+(.+)$/);
