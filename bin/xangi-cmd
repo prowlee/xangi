@@ -1,15 +1,15 @@
 #!/bin/bash
-# xangi-cmd — xangi tool-serverへのCLIラッパー
+# xangi-cmd — xangi tool-server 的 CLI 包装器
 #
-# 使い方:
+# 用法:
 #   xangi-cmd discord_history --channel 123456 --count 10
 #   xangi-cmd discord_send --channel 123456 --message "hello"
 #   xangi-cmd schedule_list
 #
-# 接続先は環境変数 XANGI_TOOL_SERVER で明示指定する。
-# xangi本体が子プロセス起動時に注入する前提。
+# 连接地址通过环境变量 XANGI_TOOL_SERVER 显式指定。
+# 假设由 xangi 主进程在启动子进程时注入。
 
-# ポート検出
+# 端口检测
 resolve_server() {
   if [ -n "$XANGI_TOOL_SERVER" ]; then
     echo "$XANGI_TOOL_SERVER"
@@ -19,38 +19,38 @@ resolve_server() {
 }
 
 TOOL_SERVER=$(resolve_server) || {
-  echo "Error: XANGI_TOOL_SERVER が設定されていません" >&2
-  echo "xangi配下で起動するか、XANGI_TOOL_SERVER=http://127.0.0.1:<port> を指定してください" >&2
+  echo "错误: XANGI_TOOL_SERVER 未设置" >&2
+  echo "请在 xangi 下启动，或指定 XANGI_TOOL_SERVER=http://127.0.0.1:<port>" >&2
   exit 1
 }
 COMMAND="$1"
 shift
 
 if [ -z "$COMMAND" ] || [ "$COMMAND" = "help" ]; then
-  echo "xangi-cmd — xangiコマンドCLI
+  echo "xangi-cmd — xangi 命令 CLI
 
-Discord操作:
-  discord_history   チャンネル履歴取得
-  discord_send      メッセージ送信
-  discord_channels  チャンネル一覧
-  discord_search    メッセージ検索
-  discord_edit      メッセージ編集
-  discord_delete    メッセージ削除
-  media_send        ファイル送信
+Discord 操作:
+  discord_history   获取频道历史记录
+  discord_send      发送消息
+  discord_channels  频道列表
+  discord_search    搜索消息
+  discord_edit      编辑消息
+  discord_delete    删除消息
+  media_send        发送文件
 
-スケジュール:
-  schedule_list     一覧表示
-  schedule_add      追加
-  schedule_remove   削除
-  schedule_toggle   有効/無効切替
+日程:
+  schedule_list     显示列表
+  schedule_add      添加
+  schedule_remove   删除
+  schedule_toggle   启用/禁用切换
 
-システム:
-  system_restart    再起動
-  system_settings   設定変更"
+系统:
+  system_restart    重启
+  system_settings   更改设置"
   exit 0
 fi
 
-# 引数を --key value ペアからJSONオブジェクトに変換
+# 将参数从 --key value 对转换为 JSON 对象
 FLAGS="{"
 FIRST=true
 while [ $# -gt 0 ]; do
@@ -65,7 +65,7 @@ while [ $# -gt 0 ]; do
       else
         FLAGS+=","
       fi
-      # JSONエスケープ（改行・ダブルクォート・バックスラッシュ）
+      # JSON 转义（换行、双引号、反斜杠）
       VALUE=$(printf '%s' "$VALUE" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')
       FLAGS+="\"$KEY\":\"$VALUE\""
       ;;
@@ -82,7 +82,7 @@ if [ -n "$XANGI_CHANNEL_ID" ]; then
   CONTEXT="{\"channelId\":\"$ESCAPED_CHANNEL_ID\"}"
 fi
 
-# tool-serverにリクエスト送信
+# 向 tool-server 发送请求
 RESPONSE=$(curl -sf "$TOOL_SERVER/api/execute" \
   -H 'Content-Type: application/json' \
   -d "{\"command\":\"$COMMAND\",\"flags\":$FLAGS,\"context\":$CONTEXT}" 2>&1)
@@ -90,18 +90,18 @@ RESPONSE=$(curl -sf "$TOOL_SERVER/api/execute" \
 CURL_EXIT=$?
 
 if [ $CURL_EXIT -ne 0 ]; then
-  echo "Error: tool-server に接続できません ($TOOL_SERVER)" >&2
-  echo "XANGI_TOOL_SERVER の値と xangiプロセスの起動状態を確認してください" >&2
+  echo "错误: 无法连接到 tool-server ($TOOL_SERVER)" >&2
+  echo "请确认 XANGI_TOOL_SERVER 的值以及 xangi 进程的启动状态" >&2
   exit 1
 fi
 
-# JSONレスポンスからresultを抽出（jqがあれば使う、なければそのまま出力）
+# 从 JSON 响应中提取 result（如果有 jq 则使用，否则直接输出）
 if command -v jq &>/dev/null; then
   OK=$(echo "$RESPONSE" | jq -r '.ok // false')
   if [ "$OK" = "true" ]; then
     echo "$RESPONSE" | jq -r '.result'
   else
-    echo "$RESPONSE" | jq -r '.error // "Unknown error"' >&2
+    echo "$RESPONSE" | jq -r '.error // "未知错误"' >&2
     exit 1
   fi
 else
