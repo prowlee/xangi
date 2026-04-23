@@ -1,7 +1,7 @@
 /**
- * システムコマンドCLIモジュール
+ * 系统命令 CLI 模块
  *
- * 再起動・設定変更をファイル経由で実行。
+ * 通过文件执行重启和配置更改。
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -37,14 +37,14 @@ function saveSettings(settings: Settings): void {
 async function systemRestart(): Promise<string> {
   const settings = loadSettings();
   if (!settings.autoRestart) {
-    return '⚠️ 自動再起動が無効です。先に system_settings --key autoRestart --value true で有効にしてください。';
+    return '⚠️ 自动重启已禁用。请先使用 system_settings --key autoRestart --value true 启用。';
   }
 
-  // 再起動トリガーファイルを作成（xangiプロセスが監視して再起動）
+  // 创建重启触发文件（xangi 进程会监视该文件并重启）
   const dataDir = process.env.DATA_DIR || join(process.cwd(), '.xangi');
   writeFileSync(join(dataDir, 'restart-trigger'), Date.now().toString());
 
-  return '🔄 再起動をリクエストしました';
+  return '🔄 已请求重启';
 }
 
 async function systemSettings(flags: Record<string, string>): Promise<string> {
@@ -52,21 +52,21 @@ async function systemSettings(flags: Record<string, string>): Promise<string> {
   const value = flags['value'];
 
   if (!key) {
-    // 設定一覧を表示
+    // 显示设置列表
     const settings = loadSettings();
     const entries = Object.entries(settings)
       .map(([k, v]) => `  ${k}: ${JSON.stringify(v)}`)
       .join('\n');
-    return `⚙️ 現在の設定:\n${entries || '  (なし)'}`;
+    return `⚙️ 当前设置:\n${entries || '  (无)'}`;
   }
 
   if (value === undefined) {
-    throw new Error('--value is required when --key is specified');
+    throw new Error('指定 --key 时必须同时指定 --value');
   }
 
   const settings = loadSettings();
 
-  // 型変換
+  // 类型转换
   let typedValue: unknown;
   if (value === 'true') typedValue = true;
   else if (value === 'false') typedValue = false;
@@ -76,10 +76,10 @@ async function systemSettings(flags: Record<string, string>): Promise<string> {
   settings[key] = typedValue;
   saveSettings(settings);
 
-  return `⚙️ 設定を更新しました: ${key} = ${JSON.stringify(typedValue)}`;
+  return `⚙️ 已更新设置: ${key} = ${JSON.stringify(typedValue)}`;
 }
 
-// ─── Router ─────────────────────────────────────────────────────────
+// ─── 路由器 ─────────────────────────────────────────────────────────
 
 export async function systemCmd(command: string, flags: Record<string, string>): Promise<string> {
   switch (command) {
@@ -88,6 +88,6 @@ export async function systemCmd(command: string, flags: Record<string, string>):
     case 'system_settings':
       return systemSettings(flags);
     default:
-      throw new Error(`Unknown system command: ${command}`);
+      throw new Error(`未知的系统命令: ${command}`);
   }
 }
