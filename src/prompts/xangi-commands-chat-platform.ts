@@ -1,43 +1,43 @@
 /**
- * チャットプラットフォーム（Discord/Slack）共通コマンド
+ * 聊天平台（Discord/Slack）通用命令
  *
- * テキストパース: MEDIA:, ===セパレータ
- * CLIツール: スケジュール, システムコマンド
+ * 文本解析：MEDIA:，=== 分隔符
+ * CLI 工具：日程、系统命令
  */
-export const XANGI_COMMANDS_CHAT_PLATFORM = `## ファイル送信
+export const XANGI_COMMANDS_CHAT_PLATFORM = `## 文件发送
 
-チャットにファイルを送信する場合は、出力に以下の形式でパスを含める（**行頭でなくてもOK**、テキスト途中でも認識される）：
+要向聊天发送文件，请在输出中包含以下格式的路径（**不一定要在行首**，文本中间也能识别）：
 
 \`\`\`
 MEDIA:/path/to/file
 \`\`\`
 
-**対応形式:** png, jpg, jpeg, gif, webp, mp3, mp4, wav, flac, pdf, zip
+**支持的格式:** png, jpg, jpeg, gif, webp, mp3, mp4, wav, flac, pdf, zip
 
-ユーザーが添付したファイルは \`[添付ファイル]\` としてパスが渡される。
+用户上传的附件将以 \`[附件]\` 的形式传递路径。
 
-## メッセージ分割セパレータ
+## 消息分割分隔符
 
-応答テキストに \`\\n===\\n\`（前後に改行を含む \`===\`）を入れると、そこで分割して別メッセージとして送信される。
-1回の応答で複数の独立した投稿を送りたい場合に使う（content-digest等）。
+在响应文本中加入 \`\\n===\\n\`（前后包含换行符的 \`===\`），将从该位置分割并作为单独的消息发送。
+当一次响应需要发送多条独立消息时使用（如 content-digest 等）。
 
-## スケジュール・リマインダー
+## 日程・提醒
 
 \`\`\`bash
 xangi-cmd schedule_list
-xangi-cmd schedule_add --input "毎日 9:00 おはよう" --channel <チャンネルID>
-xangi-cmd schedule_add --input "30分後 ミーティング" --channel <チャンネルID>
-xangi-cmd schedule_add --input "15:00 レビュー" --channel <チャンネルID>
-xangi-cmd schedule_add --input "毎週月曜 10:00 週次MTG" --channel <チャンネルID>
-xangi-cmd schedule_add --input "cron 0 9 * * * おはよう" --channel <チャンネルID>
-xangi-cmd schedule_remove --id <スケジュールID>
-xangi-cmd schedule_toggle --id <スケジュールID>
+xangi-cmd schedule_add --input "每天 9:00 早上好" --channel <频道ID>
+xangi-cmd schedule_add --input "30分钟后 开会" --channel <频道ID>
+xangi-cmd schedule_add --input "15:00 代码审查" --channel <频道ID>
+xangi-cmd schedule_add --input "每周一 10:00 周会" --channel <频道ID>
+xangi-cmd schedule_add --input "cron 0 9 * * * 早上好" --channel <频道ID>
+xangi-cmd schedule_remove --id <日程ID>
+xangi-cmd schedule_toggle --id <日程ID>
 \`\`\`
 
-## システムコマンド
+## 系统命令
 
 \`\`\`bash
 xangi-cmd system_restart
 xangi-cmd system_settings --key autoRestart --value true
-xangi-cmd system_settings  # 設定一覧
+xangi-cmd system_settings  # 查看设置列表
 \`\`\``;
