@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * スケジューラCLI - Agent（Claude Code / Codex）から呼び出す用
+ * 调度器 CLI - 供 Agent（Claude Code / Codex）调用使用
  *
- * Usage:
- *   schedule-cli add --channel <id> --platform <discord|slack> "30分後 メッセージ"
- *   schedule-cli add --channel <id> --platform <discord|slack> --cron "0 9 * * *" --message "おはよう"
+ * 用法:
+ *   schedule-cli add --channel <id> --platform <discord|slack> "30分钟后 消息"
+ *   schedule-cli add --channel <id> --platform <discord|slack> --cron "0 9 * * *" --message "早上好"
  *   schedule-cli list [--channel <id>] [--platform <discord|slack>]
  *   schedule-cli remove <id>
  *   schedule-cli toggle <id>
@@ -25,24 +25,24 @@ const schedulerConfig = {
 };
 
 function usage(): void {
-  console.log(`スケジューラCLI
+  console.log(`调度器 CLI
 
-Usage:
-  schedule-cli add --channel <id> --platform <discord|slack> "<入力>"
-  schedule-cli add --channel <id> --platform <discord|slack> --cron "<cron式>" --message "<メッセージ>"
-  schedule-cli add --channel <id> --platform <discord|slack> --at "<ISO日時>" --message "<メッセージ>"
+用法:
+  schedule-cli add --channel <id> --platform <discord|slack> "<输入>"
+  schedule-cli add --channel <id> --platform <discord|slack> --cron "<cron表达式>" --message "<消息>"
+  schedule-cli add --channel <id> --platform <discord|slack> --at "<ISO日期时间>" --message "<消息>"
   schedule-cli list [--channel <id>] [--platform <discord|slack>]
   schedule-cli remove <id>
   schedule-cli toggle <id>
 
-自然言語入力の例:
-  "30分後 ミーティング開始"
-  "15:00 レビュー"
-  "毎日 9:00 おはよう"
-  "毎週月曜 10:00 週次MTG"
+自然语言输入示例:
+  "30分钟后 会议开始"
+  "15:00 代码审查"
+  "每天 9:00 早上好"
+  "每周一 10:00 周会"
 
-環境変数:
-  XANGI_DATA_DIR or DATA_DIR  データディレクトリ（default: ./.xangi）
+环境变量:
+  XANGI_DATA_DIR or DATA_DIR  数据目录（默认: ./.xangi）
 `);
 }
 
@@ -83,11 +83,11 @@ function main(): void {
       const platform = (args['platform'] || 'discord') as Platform;
 
       if (!channel) {
-        console.error('Error: --channel is required');
+        console.error('错误: --channel 是必需的');
         process.exit(1);
       }
 
-      // cron式直接指定
+      // 直接指定 cron 表达式
       if (args['cron'] && args['message']) {
         try {
           const schedule = scheduler.add({
@@ -111,7 +111,7 @@ function main(): void {
         break;
       }
 
-      // 日時直接指定
+      // 直接指定日期时间
       if (args['at'] && args['message']) {
         try {
           const schedule = scheduler.add({
@@ -135,11 +135,11 @@ function main(): void {
         break;
       }
 
-      // 自然言語パース
+      // 自然语言解析
       const input = args['_arg'];
       if (!input) {
-        console.error('Error: input text is required');
-        console.error('Usage: schedule-cli add --channel <id> "30分後 メッセージ"');
+        console.error('错误: 输入文本是必需的');
+        console.error('用法: schedule-cli add --channel <id> "30分钟后 消息"');
         process.exit(1);
       }
 
@@ -148,8 +148,8 @@ function main(): void {
         console.error(
           JSON.stringify({
             ok: false,
-            error: `入力を解析できませんでした: "${input}"`,
-            hint: '対応: "N分後 msg", "HH:MM msg", "毎日 HH:MM msg", "毎週X曜 HH:MM msg"',
+            error: `无法解析输入: "${input}"`,
+            hint: '支持: "N分钟后 msg", "HH:MM msg", "每天 HH:MM msg", "每周X HH:MM msg"',
           })
         );
         process.exit(1);
@@ -195,7 +195,7 @@ function main(): void {
     case 'rm': {
       const idOrIndexList = args['_arg'];
       if (!idOrIndexList) {
-        console.error('Error: schedule ID or index number is required');
+        console.error('错误: 需要调度器 ID 或序号');
         process.exit(1);
       }
 
@@ -206,13 +206,13 @@ function main(): void {
       const deletedIds: string[] = [];
       const errors: string[] = [];
 
-      // 番号を大きい順にソート（削除時のずれを防ぐ）
+      // 将序号按降序排序（防止删除时的索引偏移）
       const targets = parts
         .map((p) => {
           const num = parseInt(p, 10);
           if (!isNaN(num) && num > 0 && !p.startsWith('sch_')) {
             if (num > schedules.length) {
-              errors.push(`番号 ${num} は範囲外`);
+              errors.push(`序号 ${num} 超出范围`);
               return null;
             }
             return { index: num, id: schedules[num - 1].id };
@@ -226,20 +226,20 @@ function main(): void {
         if (scheduler.remove(target.id)) {
           deletedIds.push(target.id);
         } else {
-          errors.push(`ID ${target.id} が見つからない`);
+          errors.push(`未找到 ID ${target.id}`);
         }
       }
 
       if (deletedIds.length === 0) {
         console.error(
-          JSON.stringify({ ok: false, error: errors.join(', ') || 'No schedules removed' })
+          JSON.stringify({ ok: false, error: errors.join(', ') || '未删除任何调度任务' })
         );
         process.exit(1);
       }
 
-      // 削除成功後、残りのスケジュール一覧を表示
+      // 删除成功后，显示剩余的调度任务列表
       const remaining = scheduler.list(channel, platform);
-      console.log(`✅ ${deletedIds.length}件削除しました\n`);
+      console.log(`✅ 已删除 ${deletedIds.length} 项\n`);
       console.log(
         formatScheduleList(remaining, schedulerConfig).replaceAll(SCHEDULE_SEPARATOR, '')
       );
@@ -249,13 +249,13 @@ function main(): void {
     case 'toggle': {
       const idOrIndex = args['_arg'];
       if (!idOrIndex) {
-        console.error('Error: schedule ID or index number is required');
+        console.error('错误: 需要调度器 ID 或序号');
         process.exit(1);
       }
 
       let targetId = idOrIndex.trim();
 
-      // 番号指定の場合、対応するIDを取得
+      // 如果指定的是序号，获取对应的 ID
       const indexNum = parseInt(targetId, 10);
       if (!isNaN(indexNum) && indexNum > 0 && !targetId.startsWith('sch_')) {
         const channel = args['channel'];
@@ -265,7 +265,7 @@ function main(): void {
           console.error(
             JSON.stringify({
               ok: false,
-              error: `番号 ${indexNum} は範囲外です（1〜${schedules.length}）`,
+              error: `序号 ${indexNum} 超出范围（1〜${schedules.length}）`,
             })
           );
           process.exit(1);
@@ -275,15 +275,15 @@ function main(): void {
 
       const schedule = scheduler.toggle(targetId);
       if (!schedule) {
-        console.error(JSON.stringify({ ok: false, error: `ID not found: ${targetId}` }));
+        console.error(JSON.stringify({ ok: false, error: `未找到 ID: ${targetId}` }));
         process.exit(1);
       }
 
-      // トグル結果を分かりやすく表示
-      const status = schedule.enabled ? '✅ 有効化' : '⏸️ 無効化';
-      console.log(`${status}しました: ${targetId}\n`);
+      // 清晰显示切换结果
+      const status = schedule.enabled ? '✅ 已启用' : '⏸️ 已禁用';
+      console.log(`${status}: ${targetId}\n`);
 
-      // 現在の一覧を表示
+      // 显示当前列表
       const channel = args['channel'];
       const platform = args['platform'] as Platform | undefined;
       const all = scheduler.list(channel, platform);
@@ -292,12 +292,12 @@ function main(): void {
     }
 
     default:
-      console.error(`Unknown command: ${command}`);
+      console.error(`未知命令: ${command}`);
       usage();
       process.exit(1);
   }
 
-  // CLIは即終了（cronジョブは起動しない）
+  // CLI 立即退出（不启动 cron 任务）
   scheduler.stopAll();
 }
 
