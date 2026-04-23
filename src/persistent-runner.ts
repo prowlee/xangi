@@ -10,7 +10,7 @@ import { getGitHubEnv } from './github-auth.js';
 import { logPrompt, logResponse, logError } from './transcript-logger.js';
 
 /**
- * リクエストキューのアイテム
+ * 请求队列项
  */
 interface QueueItem {
   prompt: string;
@@ -21,9 +21,9 @@ interface QueueItem {
 }
 
 /**
- * Claude Code CLI を常駐プロセスとして実行するランナー
+ * 将 Claude Code CLI 作为常驻进程执行的运行器
  *
- * --input-format=stream-json を使用して、1つのプロセスで複数のリクエストを処理
+ * 使用 --input-format=stream-json 在单个进程中处理多个请求
  */
 export class PersistentRunner extends EventEmitter implements AgentRunner {
   private process: ChildProcess | null = null;
@@ -36,21 +36,21 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   private shuttingDown = false;
   private cancelling = false;
 
-  // サーキットブレーカー: 連続クラッシュ対策
+  // 断路器：防止连续崩溃
   private crashCount = 0;
   private lastCrashTime = 0;
   private static readonly MAX_CRASHES = 3;
-  private static readonly CRASH_WINDOW_MS = 60000; // 1分以内に3回クラッシュで停止
+  private static readonly CRASH_WINDOW_MS = 60000; // 1分钟内崩溃3次则停止
 
   private model?: string;
   private timeoutMs: number;
   private workdir?: string;
   private skipPermissions: boolean;
   private systemPrompt: string;
-  private resumeSessionId?: string; // プロセス再起動時に --resume で復元するセッションID
-  private channelId?: string; // トランスクリプトログ用
-  private appSessionId?: string; // xangi側のセッションID
-  private effort?: string; // Claude Code の --effort オプション
+  private resumeSessionId?: string; // 进程重启时使用 --resume 恢复的会话ID
+  private channelId?: string; // 用于转录日志
+  private appSessionId?: string; // xangi 侧的会话ID
+  private effort?: string; // Claude Code 的 --effort 选项
 
   constructor(options?: {
     model?: string;
@@ -72,31 +72,31 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * appSessionIdを設定（外部から呼ぶ）
+   * 设置 appSessionId（从外部调用）
    */
   setAppSessionId(appSessionId: string): void {
     this.appSessionId = appSessionId;
   }
 
   /**
-   * 常駐プロセスを起動
+   * 启动常驻进程
    */
   private ensureProcess(): ChildProcess {
     if (this.process && this.processAlive) {
       return this.process;
     }
 
-    // サーキットブレーカーチェック
+    // 断路器检查
     if (this.crashCount >= PersistentRunner.MAX_CRASHES) {
       const elapsed = Date.now() - this.lastCrashTime;
       if (elapsed < PersistentRunner.CRASH_WINDOW_MS) {
         throw new Error(
-          `Circuit breaker open: ${this.crashCount} crashes in ${elapsed}ms. Waiting for cooldown.`
+          `断路器打开：${this.crashCount} 次崩溃发生在 ${elapsed}ms 内。请等待冷却。`
         );
       }
-      // クールダウン経過後はリセット（セッションは既にクリア済みなので新規セッションで起動）
+      // 冷却结束后重置（会话已清除，使用新会话启动）
       console.log(
-        '[persistent-runner] Circuit breaker reset after cooldown. Starting fresh session.'
+        '[persistent-runner] 冷却后断路器已重置。使用新会话启动。'
       );
       this.crashCount = 0;
     }
@@ -122,16 +122,16 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
       args.push('--effort', this.effort);
     }
 
-    // セッション復元: 保存済みセッションIDがあれば --resume で継続
+    // 会话恢复：如果有保存的会话ID，使用 --resume 继续
     const resumeId = this.resumeSessionId || this.sessionId;
     if (resumeId) {
       args.push('--resume', resumeId);
-      console.log(`[persistent-runner] Resuming session: ${resumeId.slice(0, 8)}...`);
+      console.log(`[persistent-runner] 恢复会话: ${resumeId.slice(0, 8)}...`);
     }
 
     args.push('--append-system-prompt', this.systemPrompt);
 
-    console.log('[persistent-runner] Starting persistent process...');
+    console.log('[persistent-runner] 正在启动常驻进程...');
 
     this.process = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -146,57 +146,57 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
     });
 
     this.process.on('close', (code) => {
-      console.log(`[persistent-runner] Process exited with code ${code}`);
+      console.log(`[persistent-runner] 进程退出，代码 ${code}`);
       const wasShuttingDown = this.shuttingDown;
       this.process = null;
       this.processAlive = false;
-      this.buffer = ''; // バッファをクリア
+      this.buffer = ''; // 清空缓冲区
 
-      // シャットダウン中またはキャンセル中なら正常終了
+      // 正在关闭或取消中，视为正常结束
       if (wasShuttingDown) {
         return;
       }
       if (this.cancelling) {
         this.cancelling = false;
-        // キューに次のリクエストがあれば処理
+        // 如果队列中有下一个请求，继续处理
         if (this.queue.length > 0) {
           this.processNext();
         }
         return;
       }
 
-      // クラッシュカウンタを更新
+      // 更新崩溃计数器
       this.crashCount++;
       this.lastCrashTime = Date.now();
       console.warn(
-        `[persistent-runner] Crash count: ${this.crashCount}/${PersistentRunner.MAX_CRASHES}`
+        `[persistent-runner] 崩溃次数: ${this.crashCount}/${PersistentRunner.MAX_CRASHES}`
       );
 
-      // 現在処理中のリクエストがあればエラーで終了
+      // 如果有正在处理的请求，以错误结束
       if (this.currentItem) {
-        this.currentItem.reject(new Error(`Process exited unexpectedly with code ${code}`));
+        this.currentItem.reject(new Error(`进程意外退出，代码 ${code}`));
         this.currentItem = null;
       }
 
-      // サーキットブレーカーがオープンでなければ再処理
+      // 如果断路器未打开，重新处理队列
       if (this.queue.length > 0 && this.crashCount < PersistentRunner.MAX_CRASHES) {
-        console.log('[persistent-runner] Restarting process for queued requests...');
+        console.log('[persistent-runner] 为队列中的请求重启进程...');
         this.processNext();
       } else if (this.crashCount >= PersistentRunner.MAX_CRASHES) {
-        // サーキットブレーカーオープン: セッションを破棄して次回は新規セッションで起動
+        // 断路器打开：销毁会话，下次请求时使用新会话启动
         console.error(
-          '[persistent-runner] Circuit breaker OPEN. Clearing session to recover on next request.'
+          '[persistent-runner] 断路器 OPEN。清除会话以便在下一次请求时恢复。'
         );
         const oldSessionId = this.sessionId || this.resumeSessionId;
         this.sessionId = '';
         this.resumeSessionId = undefined;
         this.emit('session-invalidated', this.channelId, oldSessionId);
 
-        // キューを全部エラーにする
+        // 将队列中的所有项都标记为错误
         for (const item of this.queue) {
           item.reject(
             new Error(
-              'Circuit breaker open: too many process crashes. Session cleared for recovery.'
+              '断路器打开：进程崩溃次数过多。会话已清除以进行恢复。'
             )
           );
         }
@@ -205,7 +205,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
     });
 
     this.process.on('error', (err) => {
-      console.error('[persistent-runner] Process error:', err);
+      console.error('[persistent-runner] 进程错误:', err);
       this.process = null;
       this.processAlive = false;
 
@@ -219,7 +219,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * stdout からの出力を処理
+   * 处理 stdout 输出
    */
   private handleOutput(data: string): void {
     this.buffer += data;
@@ -233,14 +233,14 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
         const json = JSON.parse(line);
         this.handleJsonMessage(json);
       } catch (e) {
-        // 予期しないCLI出力をログ（デバッグ用）
-        console.warn('[persistent-runner] Failed to parse JSON line:', line.slice(0, 100), e);
+        // 记录意外的 CLI 输出（用于调试）
+        console.warn('[persistent-runner] 解析 JSON 行失败:', line.slice(0, 100), e);
       }
     }
   }
 
   /**
-   * JSON メッセージを処理
+   * 处理 JSON 消息
    */
   private handleJsonMessage(json: {
     type: string;
@@ -258,7 +258,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }): void {
     if (json.type === 'system' && json.session_id) {
       this.sessionId = json.session_id;
-      console.log(`[persistent-runner] Session initialized: ${this.sessionId.slice(0, 8)}...`);
+      console.log(`[persistent-runner] 会话已初始化: ${this.sessionId.slice(0, 8)}...`);
     }
 
     if (json.type === 'assistant' && json.message?.content) {
@@ -278,35 +278,35 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
         this.sessionId = json.session_id;
       }
 
-      // providerSessionIdをemit（sessions.tsへの後付け保存用）
+      // 发送 providerSessionId（用于 sessions.ts 的后置保存）
       if (json.session_id) {
         this.emit('provider-session-id', json.session_id);
       }
 
-      // トランスクリプトログ: 最終結果を記録
+      // 转录日志：记录最终结果
       const resultAppSessionId = this.currentItem?.options?.appSessionId || this.appSessionId;
       if (resultAppSessionId && this.workdir) {
         if (json.is_error) {
-          logError(this.workdir, resultAppSessionId, json.result || 'Unknown error');
+          logError(this.workdir, resultAppSessionId, json.result || '未知错误');
         } else {
           logResponse(this.workdir, resultAppSessionId, json as Record<string, unknown>);
         }
       }
 
       if (json.is_error) {
-        // --resume で起動して失敗した場合、セッションが古い可能性が高い
-        // セッションをクリアしてリトライする（1回だけ）
+        // 如果使用 --resume 启动失败，很可能是会话已过期
+        // 清除会话并重试（仅一次）
         const resumeId = this.resumeSessionId;
         if (resumeId) {
           console.warn(
-            `[persistent-runner] Resume failed with session ${resumeId.slice(0, 8)}... Clearing stale session and retrying.`
+            `[persistent-runner] 使用会话 ${resumeId.slice(0, 8)}... 恢复失败。清除过期会话并重试。`
           );
           const oldSessionId = resumeId;
           this.resumeSessionId = undefined;
           this.sessionId = '';
           this.emit('session-invalidated', this.channelId, oldSessionId);
 
-          // プロセスをkillして新規セッションでリトライ
+          // 杀死进程，使用新会话重试
           if (this.process) {
             this.cancelling = true;
             this.process.kill();
@@ -315,15 +315,15 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
             this.buffer = '';
           }
 
-          // 現在のリクエストをキューの先頭に戻してリトライ
+          // 将当前请求放回队列头部重试
           if (this.currentItem) {
             this.queue.unshift(this.currentItem);
             this.currentItem = null;
           }
           this.fullText = '';
 
-          // cancelling フラグのクリアは close イベントで行われるが、
-          // プロセスがまだ死んでいない場合に備えて直接 processNext を呼ぶ
+          // cancelling 标志将在 close 事件中清除，
+          // 但为了防止进程尚未死亡，直接调用 processNext
           setTimeout(() => {
             this.cancelling = false;
             this.processNext();
@@ -331,12 +331,12 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
           return;
         }
 
-        const error = new Error(json.result || 'Unknown error');
+        const error = new Error(json.result || '未知错误');
         this.currentItem?.callbacks?.onError?.(error);
         this.currentItem?.reject(error);
       } else {
-        // ストリーミング中の累積テキストと最終 result をマージ
-        // （ツール呼び出し前のテキストが result から消えるのを防ぐ）
+        // 合并流式传输中的累积文本与最终 result
+        // （防止工具调用前的文本从 result 中消失）
         if (json.result) {
           this.fullText = mergeTexts(this.fullText, json.result);
         }
@@ -353,13 +353,13 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
       this.currentItem = null;
       this.fullText = '';
 
-      // 次のリクエストを処理
+      // 处理下一个请求
       this.processNext();
     }
   }
 
   /**
-   * キューから次のリクエストを処理
+   * 从队列中处理下一个请求
    */
   private processNext(): void {
     if (this.currentItem || this.queue.length === 0) {
@@ -371,7 +371,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
 
     const proc = this.ensureProcess();
 
-    // セッション継続のためのオプションを追加
+    // 添加会话延续选项
     const message = {
       type: 'user',
       message: {
@@ -380,31 +380,31 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
       },
     };
 
-    console.log(`[persistent-runner] Sending request (queue: ${this.queue.length} remaining)`);
+    console.log(`[persistent-runner] 发送请求（队列剩余: ${this.queue.length}）`);
 
-    // appSessionIdはリクエストのoptionsから取得（/new時に変わるため）
+    // appSessionId 从请求的 options 中获取（/new 时会变化）
     const reqAppSessionId = this.currentItem.options?.appSessionId || this.appSessionId;
 
-    // トランスクリプトログ: 送信プロンプトを記録
+    // 转录日志：记录发送的提示词
     if (reqAppSessionId && this.workdir) {
       logPrompt(this.workdir, reqAppSessionId, this.currentItem.prompt);
     }
 
     proc.stdin?.write(JSON.stringify(message) + '\n');
 
-    // タイムアウト設定: タイムアウト時はプロセスをkillして状態をクリーンに
+    // 设置超时：超时时杀死进程并清理状态
     const timeout = setTimeout(() => {
       if (this.currentItem) {
         console.warn(
-          `[persistent-runner] Request timed out after ${this.timeoutMs}ms. Killing process.`
+          `[persistent-runner] 请求在 ${this.timeoutMs}ms 后超时。正在杀死进程。`
         );
-        const error = new Error(`Request timed out after ${this.timeoutMs}ms`);
+        const error = new Error(`请求在 ${this.timeoutMs}ms 后超时`);
         this.currentItem.callbacks?.onError?.(error);
         this.currentItem.reject(error);
         this.currentItem = null;
 
-        // タイムアウト時はプロセスをkillして次のリクエスト用に再起動
-        // これにより、古いリクエストの出力が新しいリクエストに混ざるのを防ぐ
+        // 超时时杀死进程，为下一个请求重启
+        // 这可以防止旧请求的输出混入新请求
         if (this.process) {
           this.process.kill();
           this.process = null;
@@ -416,7 +416,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
       }
     }, this.timeoutMs);
 
-    // タイムアウトをクリアするためにresolve/rejectをラップ
+    // 包装 resolve/reject 以清除超时
     const originalResolve = this.currentItem.resolve;
     const originalReject = this.currentItem.reject;
 
@@ -432,7 +432,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * リクエストを実行（キューに追加）
+   * 执行请求（添加到队列）
    */
   async run(prompt: string, options?: RunOptions): Promise<RunResult> {
     return new Promise((resolve, reject) => {
@@ -442,7 +442,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * ストリーミング実行
+   * 流式执行
    */
   async runStream(
     prompt: string,
@@ -456,23 +456,23 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * 現在処理中のリクエストをキャンセル
-   * プロセス自体はkillして再起動（古い出力が混ざるのを防ぐ）
+   * 取消当前正在处理的请求
+   * 杀死进程本身并重启（防止旧输出混入）
    */
   cancel(): boolean {
     if (!this.currentItem) {
       return false;
     }
 
-    console.log('[persistent-runner] Cancelling current request');
-    const error = new Error('Request cancelled by user');
+    console.log('[persistent-runner] 正在取消当前请求');
+    const error = new Error('请求已被用户取消');
     this.currentItem.callbacks?.onError?.(error);
     this.currentItem.reject(error);
     this.currentItem = null;
     this.fullText = '';
 
-    // プロセスをkillして状態をクリーンにする（タイムアウト時と同じ戦略）
-    // cancellingフラグでcloseイベントがクラッシュ扱いしないようにする
+    // 杀死进程以清理状态（与超时策略相同）
+    // 使用 cancelling 标志防止 close 事件被视为崩溃
     if (this.process) {
       this.cancelling = true;
       this.process.kill();
@@ -480,7 +480,7 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
       this.processAlive = false;
       this.buffer = '';
     } else {
-      // プロセスがない場合はキューの次を直接処理
+      // 没有进程时，直接处理队列中的下一个
       this.processNext();
     }
 
@@ -488,11 +488,11 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * プロセスを終了
+   * 终止进程
    */
   shutdown(): void {
     if (this.process) {
-      console.log('[persistent-runner] Shutting down persistent process...');
+      console.log('[persistent-runner] 正在关闭常驻进程...');
       this.shuttingDown = true;
       this.process.stdin?.end();
       this.process.kill();
@@ -500,28 +500,28 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
       this.processAlive = false;
       this.buffer = '';
 
-      // キューに残っているリクエストをキャンセル
+      // 取消队列中剩余的请求
       for (const item of this.queue) {
-        item.reject(new Error('Runner is shutting down'));
+        item.reject(new Error('运行器正在关闭'));
       }
       this.queue = [];
 
       if (this.currentItem) {
-        this.currentItem.reject(new Error('Runner is shutting down'));
+        this.currentItem.reject(new Error('运行器正在关闭'));
         this.currentItem = null;
       }
     }
   }
 
   /**
-   * 現在のセッションID
+   * 获取当前会话ID
    */
   getSessionId(): string {
     return this.sessionId;
   }
 
   /**
-   * セッションIDを設定（プロセス再起動時の --resume 用）
+   * 设置会话ID（用于进程重启时的 --resume）
    */
   setSessionId(sessionId: string): void {
     this.resumeSessionId = sessionId;
@@ -531,21 +531,21 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * キューの長さ
+   * 获取队列长度
    */
   getQueueLength(): number {
     return this.queue.length;
   }
 
   /**
-   * プロセスが生きているか
+   * 检查进程是否存活
    */
   isAlive(): boolean {
     return this.processAlive;
   }
 
   /**
-   * サーキットブレーカーの状態を取得
+   * 获取断路器状态
    */
   getCircuitBreakerStatus(): { open: boolean; crashCount: number; lastCrashTime: number } {
     const open =
@@ -555,11 +555,11 @@ export class PersistentRunner extends EventEmitter implements AgentRunner {
   }
 
   /**
-   * サーキットブレーカーをリセット
+   * 重置断路器
    */
   resetCircuitBreaker(): void {
     this.crashCount = 0;
     this.lastCrashTime = 0;
-    console.log('[persistent-runner] Circuit breaker manually reset');
+    console.log('[persistent-runner] 断路器已手动重置');
   }
 }
