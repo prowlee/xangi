@@ -1,8 +1,8 @@
 /**
- * ローカルLLMバックエンド — xangi本体に統合
+ * 本地 LLM 后端 — 集成到 xangi 本体中
  *
- * Ollama等のOpenAI互換APIを直接叩いてエージェントループを実行する。
- * 外部HTTPサーバー不要。
+ * 直接调用 Ollama 等 OpenAI 兼容 API 来执行代理循环。
+ * 不需要外部 HTTP 服务器。
  */
 import type { AgentRunner, RunOptions, RunResult, StreamCallbacks } from '../agent-runner.js';
 import type { AgentConfig } from '../config.js';
@@ -23,30 +23,30 @@ const MAX_TOOL_ROUNDS = 10;
 const MAX_SESSION_MESSAGES = 50;
 const MAX_TOOL_OUTPUT_CHARS = 8000;
 
-// コンテキスト刈り込み設定（karaagebot準拠）
-const CONTEXT_MAX_CHARS = 120000; // 約48000トークン相当（1トークン≈2.5文字）
-const CONTEXT_KEEP_LAST = 10; // 直近10件は保護
-const TOOL_RESULT_MAX_CHARS_IN_CONTEXT = 4000; // コンテキスト内のツール結果上限
+// 上下文修剪设置（参照 karaagebot 标准）
+const CONTEXT_MAX_CHARS = 120000; // 约 48000 token（1 token ≈ 2.5 字符）
+const CONTEXT_KEEP_LAST = 10; // 保留最近 10 条
+const TOOL_RESULT_MAX_CHARS_IN_CONTEXT = 4000; // 上下文中工具结果的最大长度
 
-/** ツール結果を切り詰める（head/tail方式、karaagebot準拠） */
+/** 截断工具结果（head/tail 方式，参照 karaagebot 标准） */
 function trimToolResult(content: string, maxChars: number = MAX_TOOL_OUTPUT_CHARS): string {
   if (content.length <= maxChars) return content;
   const headChars = Math.floor(maxChars * 0.4);
   const tailChars = Math.floor(maxChars * 0.4);
   return (
     content.slice(0, headChars) +
-    `\n\n... [${content.length - headChars - tailChars} chars truncated] ...\n\n` +
+    `\n\n... [已截断 ${content.length - headChars - tailChars} 字符] ...\n\n` +
     content.slice(-tailChars)
   );
 }
 
-/** セッション（会話履歴） */
+/** 会话（对话历史） */
 interface Session {
   messages: LLMMessage[];
   updatedAt: number;
 }
 
-/** LLMエラーがセッション履歴に起因するかを判定 */
+/** 判断 LLM 错误是否与会话历史相关 */
 export function isSessionRelatedError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message.toLowerCase();
@@ -62,40 +62,40 @@ export function isSessionRelatedError(err: unknown): boolean {
   );
 }
 
-/** ユーザー向けエラーメッセージを生成 */
+/** 生成面向用户的错误消息 */
 export function formatLlmError(err: unknown): string {
-  if (!(err instanceof Error)) return 'LLMとの通信中に予期しないエラーが発生しました。';
+  if (!(err instanceof Error)) return '与 LLM 通信时发生意外错误。';
   const msg = err.message;
   if (msg.includes('ECONNREFUSED') || msg.includes('fetch failed')) {
-    return 'LLMサーバーに接続できませんでした。サーバーが起動しているか確認してください。';
+    return '无法连接到 LLM 服务器。请确认服务器是否已启动。';
   }
   if (msg.includes('timeout') || msg.includes('aborted')) {
-    return 'LLMからの応答がタイムアウトしました。しばらくしてから再試行してください。';
+    return 'LLM 响应超时。请稍后重试。';
   }
   if (msg.includes('401') || msg.includes('403')) {
-    return 'LLMサーバーへの認証に失敗しました。APIキーを確認してください。';
+    return 'LLM 服务器认证失败。请检查 API 密钥。';
   }
   if (msg.includes('429')) {
-    return 'LLMサーバーのレートリミットに達しました。しばらくしてから再試行してください。';
+    return '已达到 LLM 服务器的速率限制。请稍后重试。';
   }
   if (msg.includes('500') || msg.includes('502') || msg.includes('503')) {
-    return 'LLMサーバーで内部エラーが発生しました。しばらくしてから再試行してください。';
+    return 'LLM 服务器发生内部错误。请稍后重试。';
   }
-  return `LLMエラー: ${msg}`;
+  return `LLM 错误: ${msg}`;
 }
 
 export class LocalLlmRunner implements AgentRunner {
   private readonly llm: LLMClient;
   private readonly workdir: string;
   private readonly sessions = new Map<string, Session>();
-  private readonly sessionTtlMs = 60 * 60 * 1000; // 1時間
+  private readonly sessionTtlMs = 60 * 60 * 1000; // 1 小时
   private readonly activeAbortControllers = new Map<string, AbortController>();
-  /** 個別機能フラグ */
+  /** 各项功能开关 */
   readonly enableTools: boolean;
   readonly enableSkills: boolean;
   readonly enableXangiCommands: boolean;
   readonly enableTriggers: boolean;
-  /** トリガー定義 */
+  /** 触发器定义 */
   private triggers: Trigger[];
 
   constructor(config: AgentConfig) {
@@ -110,7 +110,7 @@ export class LocalLlmRunner implements AgentRunner {
       ? parseInt(process.env.LOCAL_LLM_NUM_CTX, 10)
       : undefined;
 
-    // 個別フラグ（環境変数で制御、未設定時はLOCAL_LLM_MODEから推定）
+    // 各项开关（通过环境变量控制，未设置时从 LOCAL_LLM_MODE 推断）
     const modeEnv = (process.env.LOCAL_LLM_MODE || '').toLowerCase();
     const modeDefaults = {
       agent: { tools: true, skills: true, xangiCommands: true, triggers: false },
@@ -139,10 +139,10 @@ export class LocalLlmRunner implements AgentRunner {
     this.llm = new LLMClient(baseUrl, model, apiKey, thinking, maxTokens, numCtx);
     this.workdir = config.workdir || process.cwd();
 
-    // トリガーを読み込み
+    // 加载触发器
     this.triggers = this.enableTriggers ? loadTriggers(this.workdir) : [];
 
-    // ツールモードが有効ならトリガー＋xangiコマンドをツールとして登録
+    // 如果工具模式启用，将触发器和 xangi 命令注册为工具
     if (this.enableTools) {
       const dynamicTools = [];
 
@@ -150,7 +150,7 @@ export class LocalLlmRunner implements AgentRunner {
         const triggerTools = triggersToToolHandlers(this.triggers, this.workdir);
         dynamicTools.push(...triggerTools);
         console.log(
-          `[local-llm] Triggers registered as tools: ${triggerTools.map((t) => t.name).join(', ')}`
+          `[local-llm] 触发器已注册为工具: ${triggerTools.map((t) => t.name).join(', ')}`
         );
       }
 
@@ -158,7 +158,7 @@ export class LocalLlmRunner implements AgentRunner {
         const xangiTools = getAllXangiTools();
         dynamicTools.push(...xangiTools);
         console.log(
-          `[local-llm] Xangi commands registered as tools: ${xangiTools.map((t) => t.name).join(', ')}`
+          `[local-llm] Xangi 命令已注册为工具: ${xangiTools.map((t) => t.name).join(', ')}`
         );
       }
 
@@ -177,7 +177,7 @@ export class LocalLlmRunner implements AgentRunner {
         .filter(Boolean)
         .join(', ') || 'chat-only';
     console.log(
-      `[local-llm] LLM: ${baseUrl} (model: ${model}, thinking: ${thinking}, features: ${features})`
+      `[local-llm] LLM: ${baseUrl} (模型: ${model}, 思考模式: ${thinking}, 功能: ${features})`
     );
   }
 
@@ -190,16 +190,16 @@ export class LocalLlmRunner implements AgentRunner {
     const tools = this.enableTools ? getAllTools() : [];
     const llmTools = this.enableTools ? toLLMTools(tools) : [];
 
-    // ユーザーメッセージ追加（画像添付があればマルチモーダルメッセージにする）
+    // 添加用户消息（如有图片附件则构建多模态消息）
     const userMsg = this.buildUserMessage(prompt);
     session.messages.push(userMsg);
 
-    // トランスクリプトにプロンプトを記録
+    // 记录提示词到转录日志
     const channelId = options?.channelId || sessionId;
     const appSid = options?.appSessionId || channelId;
     logPrompt(this.workdir, appSid, prompt);
 
-    // AbortControllerをprocessManager相当として登録
+    // 创建 AbortController 并注册（相当于 processManager）
     const abortController = new AbortController();
     this.activeAbortControllers.set(channelId, abortController);
 
@@ -218,23 +218,23 @@ export class LocalLlmRunner implements AgentRunner {
       this.trimSession(session);
       session.updatedAt = Date.now();
 
-      // トランスクリプトにレスポンスを記録
+      // 记录响应到转录日志
       logResponse(this.workdir, appSid, { result, sessionId });
 
       return { result, sessionId };
     } catch (err) {
-      // セッション履歴に起因するエラーの場合、セッションをクリアしてリトライ
+      // 如果是会话历史导致的错误，清除会话并重试
       if (session.messages.length > 1 && isSessionRelatedError(err)) {
         console.warn(
-          `[local-llm] Session-related error, retrying with fresh session: ${err instanceof Error ? err.message : String(err)}`
+          `[local-llm] 会话相关错误，使用新会话重试: ${err instanceof Error ? err.message : String(err)}`
         );
         logError(
           this.workdir,
           appSid,
-          `Session resume failed, retrying: ${err instanceof Error ? err.message : String(err)}`
+          `会话恢复失败，正在重试: ${err instanceof Error ? err.message : String(err)}`
         );
 
-        // セッションをクリアして最後のユーザーメッセージだけ残す
+        // 清除会话，只保留最后一条用户消息
         session.messages = [userMsg];
 
         try {
@@ -262,7 +262,7 @@ export class LocalLlmRunner implements AgentRunner {
           logError(
             this.workdir,
             appSid,
-            `LLM chat retry failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`
+            `LLM 聊天重试失败: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`
           );
           return { result: errorMsg, sessionId };
         }
@@ -272,7 +272,7 @@ export class LocalLlmRunner implements AgentRunner {
       logError(
         this.workdir,
         appSid,
-        `LLM chat error: ${err instanceof Error ? err.message : String(err)}`
+        `LLM 聊天错误: ${err instanceof Error ? err.message : String(err)}`
       );
       return { result: errorMsg, sessionId };
     } finally {
@@ -299,7 +299,7 @@ export class LocalLlmRunner implements AgentRunner {
     const channelId = options?.channelId || sessionId;
     const appSid = options?.appSessionId || channelId;
 
-    // トランスクリプトにプロンプトを記録
+    // 记录提示词到转录日志
     logPrompt(this.workdir, appSid, prompt);
     const abortController = new AbortController();
     this.activeAbortControllers.set(channelId, abortController);
@@ -322,25 +322,25 @@ export class LocalLlmRunner implements AgentRunner {
       this.trimSession(session);
       session.updatedAt = Date.now();
 
-      // トランスクリプトにレスポンスを記録
+      // 记录响应到转录日志
       logResponse(this.workdir, appSid, { result: fullText, sessionId });
 
       const result: RunResult = { result: fullText, sessionId };
       callbacks.onComplete?.(result);
       return result;
     } catch (err) {
-      // セッション履歴に起因するエラーの場合、セッションをクリアしてリトライ
+      // 如果是会话历史导致的错误，清除会话并重试
       if (session.messages.length > 1 && isSessionRelatedError(err)) {
         console.warn(
-          `[local-llm] Session-related stream error, retrying with fresh session: ${err instanceof Error ? err.message : String(err)}`
+          `[local-llm] 会话相关流式错误，使用新会话重试: ${err instanceof Error ? err.message : String(err)}`
         );
         logError(
           this.workdir,
           appSid,
-          `Session resume failed (stream), retrying: ${err instanceof Error ? err.message : String(err)}`
+          `会话恢复失败（流式），正在重试: ${err instanceof Error ? err.message : String(err)}`
         );
 
-        // セッションをクリアして最後のユーザーメッセージだけ残す
+        // 清除会话，只保留最后一条用户消息
         session.messages = [userMsg];
 
         try {
@@ -370,7 +370,7 @@ export class LocalLlmRunner implements AgentRunner {
         } catch (retryErr) {
           const error = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
           const errorMsg = formatLlmError(retryErr);
-          logError(this.workdir, appSid, `LLM stream retry failed: ${error.message}`);
+          logError(this.workdir, appSid, `LLM 流式重试失败: ${error.message}`);
           callbacks.onError?.(error);
           return { result: errorMsg, sessionId };
         }
@@ -378,7 +378,7 @@ export class LocalLlmRunner implements AgentRunner {
 
       const error = err instanceof Error ? err : new Error(String(err));
       const errorMsg = formatLlmError(err);
-      logError(this.workdir, appSid, `LLM stream error: ${error.message}`);
+      logError(this.workdir, appSid, `LLM 流式错误: ${error.message}`);
       callbacks.onError?.(error);
       return { result: errorMsg, sessionId };
     } finally {
@@ -395,7 +395,7 @@ export class LocalLlmRunner implements AgentRunner {
         return true;
       }
     }
-    // channelId不明の場合は全部止める
+    // 如果 channelId 未知，则停止所有
     if (this.activeAbortControllers.size > 0) {
       for (const [id, controller] of this.activeAbortControllers) {
         controller.abort();
@@ -407,14 +407,14 @@ export class LocalLlmRunner implements AgentRunner {
   }
 
   destroy(channelId: string): boolean {
-    // channelId をセッションIDとして使ってるなら削除
+    // 如果使用 channelId 作为会话 ID，则删除
     this.sessions.delete(channelId);
     return true;
   }
 
   /**
-   * エージェントループ（run用）: ツール呼び出しを含む非ストリーミング実行
-   * liteモードではツールなしの1回呼び出しで完了する。
+   * 代理循环（run 用）：包含工具调用的非流式执行
+   * lite 模式下，不调用工具，一次请求完成。
    */
   private async executeAgentLoop(
     session: Session,
@@ -427,7 +427,7 @@ export class LocalLlmRunner implements AgentRunner {
     appSessionId?: string
   ): Promise<string> {
     const logId = appSessionId || channelId;
-    // ツール無効: 1回のLLM呼び出しで完了 + トリガー検出
+    // 工具禁用：一次 LLM 调用完成 + 触发器检测
     if (!this.enableTools) {
       let response;
       try {
@@ -437,8 +437,8 @@ export class LocalLlmRunner implements AgentRunner {
         });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[local-llm] LLM chat call failed: ${errorMsg}`);
-        logError(this.workdir, logId, `LLM chat call failed: ${errorMsg}`);
+        console.error(`[local-llm] LLM 聊天调用失败: ${errorMsg}`);
+        logError(this.workdir, logId, `LLM 聊天调用失败: ${errorMsg}`);
         throw err;
       }
       session.messages.push({ role: 'assistant', content: response.content });
@@ -460,8 +460,8 @@ export class LocalLlmRunner implements AgentRunner {
         });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[local-llm] LLM chat call failed: ${errorMsg}`);
-        logError(this.workdir, logId, `LLM chat call failed: ${errorMsg}`);
+        console.error(`[local-llm] LLM 聊天调用失败: ${errorMsg}`);
+        logError(this.workdir, logId, `LLM 聊天调用失败: ${errorMsg}`);
         throw err;
       }
 
@@ -475,7 +475,7 @@ export class LocalLlmRunner implements AgentRunner {
         break;
       }
 
-      // ツール呼び出し
+      // 工具调用
       session.messages.push({
         role: 'assistant',
         content: response.content ?? '',
@@ -486,16 +486,16 @@ export class LocalLlmRunner implements AgentRunner {
 
       for (const toolCall of response.toolCalls) {
         console.log(
-          `[local-llm] Tool call: ${toolCall.name}(${JSON.stringify(toolCall.arguments).slice(0, 200)})`
+          `[local-llm] 工具调用: ${toolCall.name}(${JSON.stringify(toolCall.arguments).slice(0, 200)})`
         );
 
-        // 危険コマンド承認チェック（承認サーバー経由、Claude Codeと同じ仕組み）
+        // 危险命令审批检查（通过审批服务器，与 Claude Code 机制相同）
         const approvalResult = await checkApprovalServer(toolCall.name, toolCall.arguments);
         if (approvalResult === 'deny') {
-          console.log(`[local-llm] Tool denied by approval server: ${toolCall.name}`);
+          console.log(`[local-llm] 工具被审批服务器拒绝: ${toolCall.name}`);
           session.messages.push({
             role: 'tool',
-            content: 'Tool execution denied by user.',
+            content: '用户拒绝了工具执行。',
           });
           continue;
         }
@@ -503,15 +503,15 @@ export class LocalLlmRunner implements AgentRunner {
         const result = await executeTool(toolCall.name, toolCall.arguments, toolContext);
         const rawOutput = result.success
           ? result.output
-          : `Error: ${result.error ?? 'Unknown error'}${result.output ? `\nOutput: ${result.output}` : ''}`;
+          : `错误: ${result.error ?? '未知错误'}${result.output ? `\n输出: ${result.output}` : ''}`;
         const toolResultContent = trimToolResult(rawOutput);
 
         if (!result.success) {
-          logError(this.workdir, logId, `Tool ${toolCall.name} failed: ${rawOutput}`);
+          logError(this.workdir, logId, `工具 ${toolCall.name} 失败: ${rawOutput}`);
         }
 
         console.log(
-          `[local-llm] Tool result: ${result.success ? 'OK' : 'FAIL'} (${toolResultContent.length} chars)`
+          `[local-llm] 工具结果: ${result.success ? '成功' : '失败'} (${toolResultContent.length} 字符)`
         );
         session.messages.push({
           role: 'tool',
@@ -519,25 +519,25 @@ export class LocalLlmRunner implements AgentRunner {
           toolCallId: toolCall.id,
         });
 
-        // ツール結果からMEDIA:パスを収集
+        // 从工具结果中收集 MEDIA: 路径
         const mediaPattern = /^MEDIA:(.+)$/gm;
         for (const mediaMatch of rawOutput.matchAll(mediaPattern)) {
           const mediaPath = mediaMatch[1].trim();
           if (!pendingMediaPaths.includes(mediaPath)) {
             pendingMediaPaths.push(mediaPath);
-            console.log(`[local-llm] Media path detected from tool result: ${mediaPath}`);
+            console.log(`[local-llm] 从工具结果检测到媒体路径: ${mediaPath}`);
           }
         }
       }
 
       toolRounds++;
       if (toolRounds >= MAX_TOOL_ROUNDS) {
-        finalContent = 'Maximum tool rounds reached.';
+        finalContent = '已达到最大工具调用轮次。';
         break;
       }
     }
 
-    // ツール結果から検出したMEDIA:パスを最終応答に追記
+    // 将从工具结果中检测到的 MEDIA: 路径附加到最终响应
     if (pendingMediaPaths.length > 0) {
       finalContent += '\n' + pendingMediaPaths.map((p) => `MEDIA:${p}`).join('\n');
     }
@@ -546,8 +546,8 @@ export class LocalLlmRunner implements AgentRunner {
   }
 
   /**
-   * ストリーミングループ: ツール呼び出し + 最終応答ストリーミング
-   * liteモードではツールループをスキップし、直接ストリーミングで応答する。
+   * 流式循环：工具调用 + 最终响应流式输出
+   * lite 模式下跳过工具循环，直接流式响应。
    */
   private async executeStreamLoop(
     session: Session,
@@ -563,9 +563,9 @@ export class LocalLlmRunner implements AgentRunner {
     const logId = appSessionId || channelId;
     const pendingMediaPaths: string[] = [];
 
-    // ツール有効時のみツールループ実行
+    // 仅在工具启用时执行工具循环
     if (this.enableTools) {
-      // ツールループ: non-streaming の chat() でツール呼び出しを処理
+      // 工具循环：使用非流式 chat() 处理工具调用
       let toolRounds = 0;
       while (toolRounds < MAX_TOOL_ROUNDS) {
         let response;
@@ -577,8 +577,8 @@ export class LocalLlmRunner implements AgentRunner {
           });
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
-          console.error(`[local-llm] LLM chat call failed (stream tool loop): ${errorMsg}`);
-          logError(this.workdir, logId, `LLM chat call failed (stream tool loop): ${errorMsg}`);
+          console.error(`[local-llm] LLM 聊天调用失败（流式工具循环）: ${errorMsg}`);
+          logError(this.workdir, logId, `LLM 聊天调用失败（流式工具循环）: ${errorMsg}`);
           throw err;
         }
 
@@ -586,7 +586,7 @@ export class LocalLlmRunner implements AgentRunner {
           break;
         }
 
-        // ツール呼び出し処理
+        // 工具调用处理
         session.messages.push({
           role: 'assistant',
           content: response.content ?? '',
@@ -596,16 +596,16 @@ export class LocalLlmRunner implements AgentRunner {
         const toolContext = { workspace: this.workdir, channelId: options?.channelId };
         for (const toolCall of response.toolCalls) {
           console.log(
-            `[local-llm] Tool call: ${toolCall.name}(${JSON.stringify(toolCall.arguments).slice(0, 200)})`
+            `[local-llm] 工具调用: ${toolCall.name}(${JSON.stringify(toolCall.arguments).slice(0, 200)})`
           );
 
-          // 危険コマンド承認チェック（承認サーバー経由、Claude Codeと同じ仕組み）
+          // 危险命令审批检查（通过审批服务器，与 Claude Code 机制相同）
           const approvalResult2 = await checkApprovalServer(toolCall.name, toolCall.arguments);
           if (approvalResult2 === 'deny') {
-            console.log(`[local-llm] Tool denied by approval server: ${toolCall.name}`);
+            console.log(`[local-llm] 工具被审批服务器拒绝: ${toolCall.name}`);
             session.messages.push({
               role: 'tool',
-              content: 'Tool execution denied by user.',
+              content: '用户拒绝了工具执行。',
             });
             continue;
           }
@@ -613,13 +613,13 @@ export class LocalLlmRunner implements AgentRunner {
           const result = await executeTool(toolCall.name, toolCall.arguments, toolContext);
           const rawToolOutput = result.success
             ? result.output
-            : `Error: ${result.error ?? 'Unknown error'}${result.output ? `\nOutput: ${result.output}` : ''}`;
+            : `错误: ${result.error ?? '未知错误'}${result.output ? `\n输出: ${result.output}` : ''}`;
           const toolResultContent = trimToolResult(rawToolOutput);
           if (!result.success) {
-            logError(this.workdir, logId, `Tool ${toolCall.name} failed: ${rawToolOutput}`);
+            logError(this.workdir, logId, `工具 ${toolCall.name} 失败: ${rawToolOutput}`);
           }
           console.log(
-            `[local-llm] Tool result: ${result.success ? 'OK' : 'FAIL'} (${toolResultContent.length} chars)`
+            `[local-llm] 工具结果: ${result.success ? '成功' : '失败'} (${toolResultContent.length} 字符)`
           );
           session.messages.push({
             role: 'tool',
@@ -627,13 +627,13 @@ export class LocalLlmRunner implements AgentRunner {
             toolCallId: toolCall.id,
           });
 
-          // ツール結果からMEDIA:パスを収集
+          // 从工具结果中收集 MEDIA: 路径
           const mediaPattern = /^MEDIA:(.+)$/gm;
           for (const mediaMatch of rawToolOutput.matchAll(mediaPattern)) {
             const mediaPath = mediaMatch[1].trim();
             if (!pendingMediaPaths.includes(mediaPath)) {
               pendingMediaPaths.push(mediaPath);
-              console.log(`[local-llm] Media path detected from tool result: ${mediaPath}`);
+              console.log(`[local-llm] 从工具结果检测到媒体路径: ${mediaPath}`);
             }
           }
         }
@@ -641,7 +641,7 @@ export class LocalLlmRunner implements AgentRunner {
       }
     }
 
-    // 最終応答をストリーミングで取得
+    // 流式获取最终响应
     let fullText = '';
     try {
       for await (const chunk of this.llm.chatStream(session.messages, {
@@ -653,12 +653,12 @@ export class LocalLlmRunner implements AgentRunner {
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[local-llm] LLM chatStream failed: ${errorMsg}`);
-      logError(this.workdir, logId, `LLM chatStream failed: ${errorMsg}`);
+      console.error(`[local-llm] LLM chatStream 失败: ${errorMsg}`);
+      logError(this.workdir, logId, `LLM chatStream 失败: ${errorMsg}`);
       throw err;
     }
 
-    // ツール結果から検出したMEDIA:パスを最終応答に追記
+    // 将从工具结果中检测到的 MEDIA: 路径附加到最终响应
     if (pendingMediaPaths.length > 0) {
       fullText += '\n' + pendingMediaPaths.map((p) => `MEDIA:${p}`).join('\n');
     }
@@ -667,28 +667,28 @@ export class LocalLlmRunner implements AgentRunner {
   }
 
   /**
-   * プロンプトからユーザーメッセージを構築する。
-   * 添付ファイルに画像が含まれている場合はマルチモーダルメッセージにする。
+   * 从提示词构建用户消息。
+   * 如果附件中包含图片，则构建多模态消息。
    */
   private buildUserMessage(prompt: string): LLMMessage {
     const { imagePaths, otherPaths, cleanPrompt } = extractAttachmentPaths(prompt);
 
-    // 画像をbase64エンコード
+    // 将图片编码为 base64
     const images: LLMImageContent[] = [];
     for (const imagePath of imagePaths) {
       const base64 = encodeImageToBase64(imagePath);
       if (base64) {
         const mimeType = getMimeType(imagePath);
         images.push({ base64, mimeType });
-        console.log(`[local-llm] Image attached: ${imagePath} (${mimeType})`);
+        console.log(`[local-llm] 已附加图片: ${imagePath} (${mimeType})`);
       }
     }
 
-    // 非画像ファイルがある場合はテキストに添付情報を残す
+    // 如果有非图片文件，在文本中保留附件信息
     let content = cleanPrompt;
     if (otherPaths.length > 0) {
       const fileList = otherPaths.map((p) => `  - ${p}`).join('\n');
-      content = `${cleanPrompt}\n\n[添付ファイル]\n${fileList}`;
+      content = `${cleanPrompt}\n\n[附件]\n${fileList}`;
     }
 
     const msg: LLMMessage = { role: 'user', content };
@@ -701,29 +701,29 @@ export class LocalLlmRunner implements AgentRunner {
   private buildSystemPrompt(): string {
     const parts: string[] = [];
 
-    // XANGI_COMMANDS注入
+    // 注入 XANGI_COMMANDS
     if (this.enableXangiCommands) {
       parts.push(CHAT_SYSTEM_PROMPT_PERSISTENT + '\n\n## XANGI_COMMANDS.md\n\n' + XANGI_COMMANDS);
     }
 
-    // ワークスペースコンテキスト（CLAUDE.md, AGENTS.md, MEMORY.md）— 常に注入
+    // 工作区上下文（CLAUDE.md, AGENTS.md, MEMORY.md）— 始终注入
     const context = loadWorkspaceContext(this.workdir);
     if (context) parts.push(context);
 
-    // トリガー（毎回リロード）
+    // 触发器（每次重新加载）
     if (this.enableTriggers) {
       this.triggers = loadTriggers(this.workdir);
       if (this.triggers.length > 0) {
         if (this.enableTools) {
-          // ツールモード: トリガーをツールとして登録 + 使い方をプロンプトに追加
+          // 工具模式：将触发器注册为工具，并将使用说明添加到提示词
           const triggerTools = triggersToToolHandlers(this.triggers, this.workdir);
           registerDynamicTools(triggerTools);
-          const toolLines = this.triggers.map((t) => `- **${t.name}**(args): ${t.description}`);
+          const toolLines = this.triggers.map((t) => `- **${t.name}**(参数): ${t.description}`);
           parts.push(
             [
-              '## カスタムツール',
+              '## 自定义工具',
               '',
-              '以下のツールが利用可能です。該当するリクエストには**必ずツールを呼び出して**ください。自分の知識で回答しないでください。',
+              '以下工具可用。对于相关请求，**必须调用工具**。不要凭自己的知识回答。',
               '',
               ...toolLines,
             ].join('\n')
@@ -732,7 +732,7 @@ export class LocalLlmRunner implements AgentRunner {
       }
     }
 
-    // スキル一覧
+    // 技能列表
     if (this.enableSkills) {
       const skills = loadSkills(this.workdir);
       if (skills.length > 0) {
@@ -740,12 +740,12 @@ export class LocalLlmRunner implements AgentRunner {
           .map((s) => `  - **${s.name}**: ${s.description}\n    SKILL.md: ${s.path}`)
           .join('\n');
         parts.push(
-          `## Available Skills\n\nUse the read tool to load SKILL.md before using a skill. NEVER guess commands — always read SKILL.md first.\n${skillLines}`
+          `## 可用技能\n\n在使用技能前，请使用 read 工具加载 SKILL.md。切勿猜测命令 — 始终先阅读 SKILL.md。\n${skillLines}`
         );
       }
     }
 
-    // ツール有効時にツール使い方プロンプトを注入
+    // 工具启用时注入工具使用说明提示词
     if (this.enableTools) {
       parts.push(TOOLS_USAGE_PROMPT);
     }
@@ -763,31 +763,31 @@ export class LocalLlmRunner implements AgentRunner {
   }
 
   /**
-   * コンテキスト刈り込み（karaagebot準拠）
-   * 1. ツール結果をTOOL_RESULT_MAX_CHARS_IN_CONTEXTに切り詰め
-   * 2. 直近CONTEXT_KEEP_LAST件を保護
-   * 3. 合計文字数がCONTEXT_MAX_CHARSを超えたら古いメッセージから削除
-   * 4. メッセージ数がMAX_SESSION_MESSAGESを超えたら古いものを削除
+   * 上下文修剪（参照 karaagebot 标准）
+   * 1. 将工具结果截断至 TOOL_RESULT_MAX_CHARS_IN_CONTEXT
+   * 2. 保留最近 CONTEXT_KEEP_LAST 条消息
+   * 3. 如果总字符数超过 CONTEXT_MAX_CHARS，从旧消息开始删除
+   * 4. 如果消息数量超过 MAX_SESSION_MESSAGES，删除旧消息
    */
   private trimSession(session: Session): void {
-    // ツール結果を切り詰め（コンテキスト内）
+    // 截断工具结果（在上下文中）
     for (const msg of session.messages) {
       if (msg.role === 'tool' && msg.content.length > TOOL_RESULT_MAX_CHARS_IN_CONTEXT) {
         const head = Math.floor(TOOL_RESULT_MAX_CHARS_IN_CONTEXT * 0.4);
         const tail = Math.floor(TOOL_RESULT_MAX_CHARS_IN_CONTEXT * 0.4);
         msg.content =
           msg.content.slice(0, head) +
-          `\n\n... [${msg.content.length - head - tail} chars trimmed for context] ...\n\n` +
+          `\n\n... [为节省上下文，已截断 ${msg.content.length - head - tail} 字符] ...\n\n` +
           msg.content.slice(-tail);
       }
     }
 
-    // メッセージ数制限
+    // 消息数量限制
     if (session.messages.length > MAX_SESSION_MESSAGES) {
       session.messages = session.messages.slice(-MAX_SESSION_MESSAGES);
     }
 
-    // 合計文字数制限（直近CONTEXT_KEEP_LAST件を保護）
+    // 总字符数限制（保留最近 CONTEXT_KEEP_LAST 条）
     let totalChars = session.messages.reduce((sum, m) => sum + m.content.length, 0);
     while (totalChars > CONTEXT_MAX_CHARS && session.messages.length > CONTEXT_KEEP_LAST) {
       const removed = session.messages.shift();
