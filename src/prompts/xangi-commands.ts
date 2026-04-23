@@ -1,5 +1,5 @@
 /**
- * xangi専用コマンド — プラットフォーム別に組み立て
+ * xangi 专用命令 — 按平台组合
  */
 import { XANGI_COMMANDS_COMMON } from './xangi-commands-common.js';
 import { XANGI_COMMANDS_CHAT_PLATFORM } from './xangi-commands-chat-platform.js';
@@ -10,11 +10,11 @@ import { XANGI_COMMANDS_WEB } from './xangi-commands-web.js';
 export type ChatPlatform = 'discord' | 'slack' | 'web';
 
 /**
- * プラットフォームに応じたXANGI_COMMANDSを構築
- * - discord: 共通 + チャットPF共通 + Discord専用
- * - slack: 共通 + チャットPF共通 + Slack専用
- * - web: 共通 + Web専用
- * - undefined: 共通 + チャットPF共通 + 全プラットフォーム
+ * 根据平台构建 XANGI_COMMANDS
+ * - discord: 通用 + 聊天平台通用 + Discord 专用
+ * - slack: 通用 + 聊天平台通用 + Slack 专用
+ * - web: 通用 + Web 专用
+ * - undefined: 通用 + 聊天平台通用 + 所有平台
  */
 export function buildXangiCommands(platform?: ChatPlatform): string {
   const parts = [XANGI_COMMANDS_COMMON];
@@ -37,7 +37,7 @@ export function buildXangiCommands(platform?: ChatPlatform): string {
   return parts.join('\n\n');
 }
 
-// 後方互換
+// 向后兼容
 export const XANGI_COMMANDS = buildXangiCommands();
 
 export {
