@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * xangi-cmd — xangiコマンドのCLIインターフェース
+ * xangi-cmd — xangi 命令的 CLI 接口
  *
- * Discord REST APIを直接叩いてDiscord操作を行う。
- * Claude CodeからBash経由で、Local LLMからexecツール経由で呼ばれる。
+ * 直接调用 Discord REST API 执行 Discord 操作。
+ * 通过 Bash 被 Claude Code 调用，通过 exec 工具被本地 LLM 调用。
  *
- * 環境変数:
- *   XANGI_DIR — xangi-devのディレクトリ（.envの読み込み元）
- *   DISCORD_TOKEN — Discord BOTトークン（.envから自動読み込み）
+ * 环境变量:
+ *   XANGI_DIR — xangi-dev 的目录（.env 的加载来源）
+ *   DISCORD_TOKEN — Discord BOT 令牌（从 .env 自动加载）
  *
- * 使い方:
+ * 用法:
  *   node xangi-cmd.js discord_history --channel <id> [--count <n>] [--offset <n>]
  *   node xangi-cmd.js discord_send --channel <id> --message <text>
  *   node xangi-cmd.js discord_channels --guild <id>
@@ -31,10 +31,10 @@ import { discordApi } from './discord-api.js';
 import { scheduleCmd } from './schedule-cmd.js';
 import { systemCmd } from './system-cmd.js';
 
-// .env を自動読み込み（DISCORD_TOKEN等のシークレットを取得）
+// 自动加载 .env 文件（获取 DISCORD_TOKEN 等密钥）
 function loadEnvFile(): void {
-  // 1. XANGI_DIR から .env を読む
-  // 2. なければ自身の dist/cli/ から2階層上（xangi-dev/）の .env を読む
+  // 1. 从 XANGI_DIR 读取 .env
+  // 2. 如果没有，则从自身 dist/cli/ 向上两级（xangi-dev/）读取 .env
   const candidates: string[] = [];
 
   if (process.env.XANGI_DIR) {
@@ -54,14 +54,14 @@ function loadEnvFile(): void {
         if (eqIdx === -1) continue;
         const key = trimmed.slice(0, eqIdx).trim();
         let value = trimmed.slice(eqIdx + 1).trim();
-        // クォート除去
+        // 去除引号
         if (
           (value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'"))
         ) {
           value = value.slice(1, -1);
         }
-        // 既に設定されていなければセット
+        // 如果尚未设置，则设置
         if (!process.env[key]) {
           process.env[key] = value;
         }
@@ -91,26 +91,26 @@ async function main(): Promise<void> {
   const { command, flags } = parseArgs(process.argv);
 
   if (!command || command === 'help') {
-    console.log(`xangi-cmd — xangiコマンドCLI
+    console.log(`xangi-cmd — xangi 命令 CLI
 
-Discord操作:
-  discord_history   チャンネル履歴取得
-  discord_send      メッセージ送信
-  discord_channels  チャンネル一覧
-  discord_search    メッセージ検索
-  discord_edit      メッセージ編集
-  discord_delete    メッセージ削除
+Discord 操作:
+  discord_history   获取频道历史记录
+  discord_send      发送消息
+  discord_channels  频道列表
+  discord_search    搜索消息
+  discord_edit      编辑消息
+  discord_delete    删除消息
 
-スケジュール:
-  schedule_list     一覧表示
-  schedule_add      追加
-  schedule_remove   削除
-  schedule_toggle   有効/無効切替
+日程:
+  schedule_list     显示列表
+  schedule_add      添加
+  schedule_remove   删除
+  schedule_toggle   启用/禁用切换
 
-その他:
-  media_send        ファイル送信
-  system_restart    再起動
-  system_settings   設定変更`);
+其他:
+  media_send        发送文件
+  system_restart    重启
+  system_settings   更改设置`);
     return;
   }
 
@@ -126,13 +126,13 @@ Discord操作:
     } else if (command.startsWith('system_')) {
       result = await systemCmd(command, flags);
     } else {
-      console.error(`Unknown command: ${command}`);
+      console.error(`未知命令: ${command}`);
       process.exit(1);
     }
 
     console.log(result);
   } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`错误: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 }
