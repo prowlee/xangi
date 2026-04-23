@@ -1,8 +1,8 @@
 /**
- * WebチャットUI — ChatGPT風サイドバー付き
+ * Web 聊天 UI — 带 ChatGPT 风格侧边栏
  *
- * ブラウザからlocalhost:PORT にアクセスしてAIとチャット。
- * セッション単位のログ（logs/sessions/<appSessionId>.jsonl）で管理。
+ * 从浏览器访问 localhost:PORT 与 AI 聊天。
+ * 基于会话的日志（logs/sessions/<appSessionId>.jsonl）进行管理。
  */
 import { createServer } from 'http';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs';
@@ -32,7 +32,7 @@ const __dirname = dirname(__filename);
 const DEFAULT_PORT = 18888;
 const WEB_CHANNEL_ID = 'web-chat';
 
-// resume後の最初のメッセージにセッション履歴を注入するためのフラグ
+// 用于在恢复后向第一条消息注入会话历史记录的标志
 let resumedAppSessionId: string | null = null;
 
 interface WebChatOptions {
@@ -49,7 +49,7 @@ export function startWebChat(options: WebChatOptions): void {
     const rawUrl = req.url || '/';
     const url = rawUrl.split('?')[0];
 
-    // CORS headers
+    // CORS 头
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -60,7 +60,7 @@ export function startWebChat(options: WebChatOptions): void {
       return;
     }
 
-    // 静的ファイル配信
+    // 静态文件服务
     if (url === '/' || url === '/index.html') {
       try {
         const htmlPath = join(__dirname, '..', 'web', 'index.html');
@@ -74,21 +74,21 @@ export function startWebChat(options: WebChatOptions): void {
         res.end(html);
       } catch {
         res.writeHead(500);
-        res.end('web/index.html not found');
+        res.end('web/index.html 未找到');
       }
       return;
     }
 
-    // ヘルスチェック
+    // 健康检查
     if (url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', port }));
       return;
     }
 
-    // GET /api/sessions — セッション一覧
+    // GET /api/sessions — 会话列表
     if (url === '/api/sessions' && req.method === 'GET') {
-      // sessions.jsonに登録されてるセッション（タイトルが意味のないものは除外）
+      // sessions.json 中注册的会话（排除标题无意义的）
       const managed = listAllSessions()
         .filter((s) => {
           const t = s.title || s.contextKey;
@@ -106,7 +106,7 @@ export function startWebChat(options: WebChatOptions): void {
         }));
       const managedIds = new Set(managed.map((s) => s.id));
 
-      // logs/sessions/ ディレクトリのログファイルも含める（移行データ等）
+      // 也包括 logs/sessions/ 目录中的日志文件（迁移数据等）
       const sessionsDir = join(workdir, 'logs', 'sessions');
       const unmanaged: typeof managed = [];
       if (existsSync(sessionsDir)) {
@@ -116,7 +116,7 @@ export function startWebChat(options: WebChatOptions): void {
           if (managedIds.has(id)) continue;
           const filePath = join(sessionsDir, file);
           const stat = statSync(filePath);
-          // 最初の行からタイトルを取得
+          // 从第一行获取标题
           let title = id;
           try {
             const firstLine = readFileSync(filePath, 'utf-8').split('\n')[0];
@@ -124,18 +124,18 @@ export function startWebChat(options: WebChatOptions): void {
               const entry = JSON.parse(firstLine);
               if (entry.role === 'user' && typeof entry.content === 'string') {
                 title = entry.content
-                  .replace(/^\[プラットフォーム: [^\]]*\]\n?/, '')
-                  .replace(/^\[チャンネル: [^\]]*\]\n?/, '')
-                  .replace(/^\[発言者: [^\]]*\]\n?/, '')
-                  .replace(/^\[現在時刻: [^\]]*\]\n?/, '')
+                  .replace(/^\[平台: [^\]]*\]\n?/, '')
+                  .replace(/^\[频道: [^\]]*\]\n?/, '')
+                  .replace(/^\[发言者: [^\]]*\]\n?/, '')
+                  .replace(/^\[当前时间: [^\]]*\]\n?/, '')
                   .trim()
                   .slice(0, 50);
               }
             }
           } catch {
-            /* ignore */
+            /* 忽略 */
           }
-          // タイトルが意味のないもの（チャンネルID、空、IDのまま）はスキップ
+          // 跳过无意义的标题（频道 ID、空、保持为 ID 的）
           if (!title || title === id || /^\d{10,}$/.test(title)) continue;
           unmanaged.push({
             id,
@@ -150,7 +150,7 @@ export function startWebChat(options: WebChatOptions): void {
         }
       }
 
-      // managedを先に、unmanagedを更新日時降順で
+      // managed 优先，unmanaged 按更新时间降序排列
       unmanaged.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       const sessions = [...managed, ...unmanaged];
 
@@ -159,7 +159,7 @@ export function startWebChat(options: WebChatOptions): void {
       return;
     }
 
-    // GET /api/sessions/:id — セッション詳細（メッセージ一覧）
+    // GET /api/sessions/:id — 会话详情（消息列表）
     if (url.startsWith('/api/sessions/') && req.method === 'GET') {
       const appSessionId = decodeURIComponent(url.replace('/api/sessions/', ''));
       const entry = getSessionEntry(appSessionId);
@@ -198,7 +198,7 @@ export function startWebChat(options: WebChatOptions): void {
       return;
     }
 
-    // PATCH /api/sessions/:id — タイトル変更
+    // PATCH /api/sessions/:id — 修改标题
     if (url.startsWith('/api/sessions/') && req.method === 'PATCH') {
       const appSessionId = decodeURIComponent(url.replace('/api/sessions/', ''));
       const body = await readBody(req);
@@ -210,7 +210,7 @@ export function startWebChat(options: WebChatOptions): void {
       return;
     }
 
-    // POST /api/sessions — 新規セッション
+    // POST /api/sessions — 新建会话
     if (url === '/api/sessions' && req.method === 'POST') {
       agentRunner.destroy?.(WEB_CHANNEL_ID);
       deleteSession(WEB_CHANNEL_ID);
@@ -220,44 +220,44 @@ export function startWebChat(options: WebChatOptions): void {
       return;
     }
 
-    // POST /api/sessions/:id/resume — セッション再開
+    // POST /api/sessions/:id/resume — 恢复会话
     if (url.match(/^\/api\/sessions\/[^/]+\/resume$/) && req.method === 'POST') {
       const targetId = decodeURIComponent(url.replace('/api/sessions/', '').replace('/resume', ''));
       const entry = getSessionEntry(targetId);
       const providerSid = entry?.agent?.providerSessionId;
 
-      // activeByContextを切り替え（ランナーは破棄しない = プロセスの文脈を維持）
+      // 切换 activeByContext（不销毁运行器 = 保持进程上下文）
       if (providerSid) {
         setSession(WEB_CHANNEL_ID, providerSid);
       }
       activateSession(WEB_CHANNEL_ID, targetId);
       resumedAppSessionId = targetId;
 
-      console.log(`[web-chat] Resumed session ${targetId}`);
+      console.log(`[web-chat] 恢复会话 ${targetId}`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, sessionId: targetId }));
       return;
     }
 
-    // DELETE /api/sessions/:id — セッション削除
+    // DELETE /api/sessions/:id — 删除会话
     if (url.startsWith('/api/sessions/') && !url.includes('/resume') && req.method === 'DELETE') {
       const targetId = decodeURIComponent(url.replace('/api/sessions/', ''));
       removeSession(targetId);
 
-      // ログファイルも削除
+      // 同时删除日志文件
       const logPath = join(workdir, 'logs', 'sessions', `${targetId}.jsonl`);
       if (existsSync(logPath)) {
         const { unlinkSync } = await import('fs');
         unlinkSync(logPath);
       }
 
-      console.log(`[web-chat] Deleted session ${targetId}`);
+      console.log(`[web-chat] 已删除会话 ${targetId}`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
       return;
     }
 
-    // POST /api/upload — ファイルアップロード
+    // POST /api/upload — 文件上传
     if (url === '/api/upload' && req.method === 'POST') {
       try {
         const uploadDir = join(workdir, 'tmp', 'web-uploads');
@@ -269,12 +269,12 @@ export function startWebChat(options: WebChatOptions): void {
         }
         const body = Buffer.concat(chunks);
 
-        // multipart/form-data をパース（簡易実装）
+        // 解析 multipart/form-data（简易实现）
         const contentType = req.headers['content-type'] || '';
         const boundaryMatch = contentType.match(/boundary=(.+)/);
         if (!boundaryMatch) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'No boundary in content-type' }));
+          res.end(JSON.stringify({ error: 'Content-Type 中没有 boundary' }));
           return;
         }
         const boundary = '--' + boundaryMatch[1];
@@ -293,9 +293,9 @@ export function startWebChat(options: WebChatOptions): void {
           const safeName = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
           const filePath = join(uploadDir, safeName);
 
-          // バイナリデータを取り出し（末尾の\r\nを除去）
+          // 提取二进制数据（移除末尾的 \r\n）
           const dataStart = headerEnd + 4;
-          const dataEnd = part.length - 2; // trailing \r\n
+          const dataEnd = part.length - 2; // 末尾的 \r\n
           const fileData = Buffer.from(part.slice(dataStart, dataEnd), 'binary');
           writeFileSync(filePath, fileData);
 
@@ -305,20 +305,20 @@ export function startWebChat(options: WebChatOptions): void {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ files }));
       } catch (err) {
-        console.error('[web-chat] Upload error:', err);
+        console.error('[web-chat] 上传错误:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Upload failed' }));
+        res.end(JSON.stringify({ error: '上传失败' }));
       }
       return;
     }
 
-    // GET /api/files/* — アップロード済みファイルを配信
+    // GET /api/files/* — 提供已上传的文件
     if (url.startsWith('/api/files/') && req.method === 'GET') {
       const filename = decodeURIComponent(url.replace('/api/files/', ''));
       const filePath = join(workdir, 'tmp', 'web-uploads', filename);
       if (!existsSync(filePath) || filename.includes('..')) {
         res.writeHead(404);
-        res.end('Not found');
+        res.end('未找到');
         return;
       }
       const ext = extname(filePath).toLowerCase();
@@ -338,19 +338,19 @@ export function startWebChat(options: WebChatOptions): void {
       return;
     }
 
-    // GET /api/workspace-file?path= — ワークスペース内ファイルを配信（MEDIA:表示用）
+    // GET /api/workspace-file?path= — 提供工作区内的文件（用于 MEDIA: 显示）
     if (url.startsWith('/api/workspace-file') && req.method === 'GET') {
       const urlObj = new URL(rawUrl, `http://${req.headers.host}`);
       const filePath = urlObj.searchParams.get('path') || '';
-      // セキュリティ: ワークスペース内のファイルのみ許可
+      // 安全限制：只允许工作区内的文件
       if (!filePath || !filePath.startsWith(workdir) || filePath.includes('..')) {
         res.writeHead(403);
-        res.end('Forbidden');
+        res.end('禁止访问');
         return;
       }
       if (!existsSync(filePath)) {
         res.writeHead(404);
-        res.end('Not found');
+        res.end('未找到');
         return;
       }
       const ext = extname(filePath).toLowerCase();
@@ -370,7 +370,7 @@ export function startWebChat(options: WebChatOptions): void {
       return;
     }
 
-    // POST /api/chat — メッセージ送信（SSEストリーミング）
+    // POST /api/chat — 发送消息（SSE 流式传输）
     if (url === '/api/chat' && req.method === 'POST') {
       try {
         const body = await readBody(req);
@@ -378,20 +378,20 @@ export function startWebChat(options: WebChatOptions): void {
 
         if (!message.trim()) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'message is required' }));
+          res.end(JSON.stringify({ error: 'message 参数是必需的' }));
           return;
         }
 
-        console.log(`[web-chat] Message: ${message.slice(0, 100)}`);
+        console.log(`[web-chat] 消息: ${message.slice(0, 100)}`);
 
         const appSessionId = ensureSession(WEB_CHANNEL_ID, { platform: 'web' });
         const sessionId = getSession(WEB_CHANNEL_ID);
 
-        // resume後の最初のメッセージ: 過去の会話履歴を注入
+        // 恢复后的第一条消息：注入过去的对话历史
         let historyContext = '';
         if (resumedAppSessionId) {
           const pastMessages = readSessionMessages(workdir, resumedAppSessionId);
-          // 直近10件の会話を要約として注入
+          // 注入最近10条对话作为上下文
           const recent = pastMessages.slice(-10);
           if (recent.length > 0) {
             const lines = recent
@@ -401,22 +401,22 @@ export function startWebChat(options: WebChatOptions): void {
                     ? ((m.content as Record<string, unknown>).result as string) || ''
                     : String(m.content);
                 const cleaned = content
-                  .replace(/^\[プラットフォーム: [^\]]*\]\n?/m, '')
-                  .replace(/^\[チャンネル: [^\]]*\]\n?/m, '')
-                  .replace(/^\[発言者: [^\]]*\]\n?/m, '')
-                  .replace(/^\[現在時刻: [^\]]*\]\n?/m, '')
+                  .replace(/^\[平台: [^\]]*\]\n?/m, '')
+                  .replace(/^\[频道: [^\]]*\]\n?/m, '')
+                  .replace(/^\[发言者: [^\]]*\]\n?/m, '')
+                  .replace(/^\[当前时间: [^\]]*\]\n?/m, '')
                   .trim();
-                return `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${cleaned.slice(0, 200)}`;
+                return `${m.role === 'user' ? '用户' : 'AI'}: ${cleaned.slice(0, 200)}`;
               })
               .join('\n');
-            historyContext = `\n[以下はこのセッションの直近の会話履歴です。この文脈を踏まえて返答してください]\n${lines}\n[履歴ここまで]\n\n`;
+            historyContext = `\n[以下是本次会话最近的对话历史。请基于此上下文进行回复]\n${lines}\n[历史结束]\n\n`;
           }
           resumedAppSessionId = null;
         }
 
-        const prompt = `[プラットフォーム: Web]\n${historyContext}${message}`;
+        const prompt = `[平台: Web]\n${historyContext}${message}`;
 
-        // SSEヘッダー
+        // SSE 头
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
@@ -443,12 +443,12 @@ export function startWebChat(options: WebChatOptions): void {
                 sendSSE('tool', { toolName, inputSummary });
               },
               onComplete: (completedResult) => {
-                // providerSessionIdを後付け保存
+                // 附加保存 providerSessionId
                 setProviderSessionId(appSessionId, completedResult.sessionId);
                 setSession(WEB_CHANNEL_ID, completedResult.sessionId);
                 incrementMessageCount(appSessionId);
 
-                // 初回メッセージでタイトル自動設定
+                // 第一条消息自动设置标题
                 const entry = getSessionEntry(appSessionId);
                 if (!entry?.title) {
                   updateSessionTitle(appSessionId, message.slice(0, 50));
@@ -465,7 +465,7 @@ export function startWebChat(options: WebChatOptions): void {
             }
           );
 
-          // 完了イベント（usage情報付き）
+          // 完成事件（附带 usage 信息）
           const msgs = readSessionMessages(workdir, appSessionId);
           const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
           const usageObj =
@@ -489,21 +489,21 @@ export function startWebChat(options: WebChatOptions): void {
         }
         res.end();
       } catch (err) {
-        console.error('[web-chat] Error:', err);
+        console.error('[web-chat] 错误:', err);
         if (!res.headersSent) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
         }
-        res.end(JSON.stringify({ error: 'Internal server error' }));
+        res.end(JSON.stringify({ error: '内部服务器错误' }));
       }
       return;
     }
 
     res.writeHead(404);
-    res.end('Not found');
+    res.end('未找到');
   });
 
   server.listen(port, '0.0.0.0', () => {
-    console.log(`[web-chat] Chat UI: http://localhost:${port}`);
+    console.log(`[web-chat] 聊天 UI: http://localhost:${port}`);
   });
 }
 
