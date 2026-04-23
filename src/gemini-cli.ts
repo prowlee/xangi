@@ -8,7 +8,7 @@ import { getGitHubEnv } from './github-auth.js';
 import { logPrompt, logResponse } from './transcript-logger.js';
 
 /**
- * Gemini CLI の JSON 出力形式
+ * Gemini CLI 的 JSON 输出格式
  */
 interface GeminiJsonResponse {
   session_id: string;
@@ -19,7 +19,7 @@ interface GeminiJsonResponse {
 }
 
 /**
- * Gemini CLI の stream-json イベント形式
+ * Gemini CLI 的 stream-json 事件格式
  */
 interface GeminiStreamEvent {
   type: 'init' | 'message' | 'result';
@@ -40,7 +40,7 @@ interface GeminiStreamEvent {
 }
 
 /**
- * Gemini CLI を実行するランナー
+ * 执行 Gemini CLI 的运行器
  */
 export class GeminiRunner implements AgentRunner {
   private model?: string;
@@ -57,7 +57,7 @@ export class GeminiRunner implements AgentRunner {
   }
 
   /**
-   * コマンド引数を構築（run/runStream 共通部分）
+   * 构建命令参数（run/runStream 公共部分）
    */
   private buildBaseArgs(options?: RunOptions): string[] {
     const args: string[] = [];
@@ -71,7 +71,7 @@ export class GeminiRunner implements AgentRunner {
       args.push('--model', this.model);
     }
 
-    // セッション継続
+    // 会话延续
     if (options?.sessionId) {
       args.push('--resume', options.sessionId);
     }
@@ -91,11 +91,11 @@ export class GeminiRunner implements AgentRunner {
     ];
 
     const sessionInfo = options?.sessionId
-      ? ` (session: ${options.sessionId.slice(0, 8)}...)`
-      : ' (new)';
-    console.log(`[gemini] Executing in ${this.workdir || 'default dir'}${sessionInfo}`);
+      ? ` (会话: ${options.sessionId.slice(0, 8)}...)`
+      : ' (新会话)';
+    console.log(`[gemini] 在 ${this.workdir || '默认目录'} 中执行${sessionInfo}`);
 
-    // トランスクリプトログ: 送信プロンプトを記録
+    // 转录日志：记录发送的提示词
     if (options?.appSessionId && this.workdir) {
       logPrompt(this.workdir, options.appSessionId, fullPrompt);
     }
@@ -104,7 +104,7 @@ export class GeminiRunner implements AgentRunner {
       const { stdout, sessionId } = await this.execute(args, options?.channelId);
       const response = this.parseJsonResponse(stdout);
 
-      // トランスクリプトログ: 応答を記録
+      // 转录日志：记录响应
       if (options?.appSessionId && this.workdir) {
         logResponse(this.workdir, options.appSessionId, {
           result: response.response,
@@ -117,9 +117,9 @@ export class GeminiRunner implements AgentRunner {
         sessionId: sessionId || response.session_id,
       };
     } catch (err) {
-      // セッションresume失敗時は新規セッションでリトライ
+      // 会话恢复失败时，使用新会话重试
       if (options?.sessionId && err instanceof Error && err.message.includes('exited with code')) {
-        console.warn(`[gemini] Session resume failed, retrying without session: ${err.message}`);
+        console.warn(`[gemini] 会话恢复失败，将在无会话情况下重试: ${err.message}`);
         const retryArgs = [
           ...this.buildBaseArgs({ ...options, sessionId: undefined }),
           '--prompt',
@@ -130,7 +130,7 @@ export class GeminiRunner implements AgentRunner {
         const { stdout, sessionId } = await this.execute(retryArgs, options?.channelId);
         const response = this.parseJsonResponse(stdout);
 
-        // トランスクリプトログ: リトライ応答を記録
+        // 转录日志：记录重试响应
         if (options?.appSessionId && this.workdir) {
           logResponse(this.workdir, options.appSessionId, {
             result: response.response,
@@ -179,7 +179,7 @@ export class GeminiRunner implements AgentRunner {
       const timeout = setTimeout(() => {
         proc.kill();
         this.currentProcess = null;
-        reject(new Error(`Gemini CLI timed out after ${this.timeoutMs}ms`));
+        reject(new Error(`Gemini CLI 超时（${this.timeoutMs}ms）`));
       }, this.timeoutMs);
 
       proc.on('close', (code) => {
@@ -187,16 +187,16 @@ export class GeminiRunner implements AgentRunner {
         this.currentProcess = null;
 
         if (code !== 0) {
-          reject(new Error(`Gemini CLI exited with code ${code}: ${stderr}`));
+          reject(new Error(`Gemini CLI 退出，代码 ${code}: ${stderr}`));
           return;
         }
 
-        // JSON出力からsession_idを抽出
+        // 从 JSON 输出中提取 session_id
         try {
           const json = JSON.parse(stdout.trim()) as GeminiJsonResponse;
           sessionId = json.session_id;
         } catch {
-          // パースできなくてもstdoutはそのまま返す
+          // 即使解析失败，也原样返回 stdout
         }
 
         resolve({ stdout, sessionId });
@@ -205,7 +205,7 @@ export class GeminiRunner implements AgentRunner {
       proc.on('error', (err) => {
         clearTimeout(timeout);
         this.currentProcess = null;
-        reject(new Error(`Failed to spawn Gemini CLI: ${err.message}`));
+        reject(new Error(`无法启动 Gemini CLI: ${err.message}`));
       });
     });
   }
@@ -215,14 +215,14 @@ export class GeminiRunner implements AgentRunner {
       return JSON.parse(output.trim()) as GeminiJsonResponse;
     } catch (err) {
       if (err instanceof SyntaxError) {
-        throw new Error(`Failed to parse Gemini CLI response: ${output}`);
+        throw new Error(`解析 Gemini CLI 响应失败: ${output}`);
       }
       throw err;
     }
   }
 
   /**
-   * ストリーミング実行
+   * 流式执行
    */
   async runStream(
     prompt: string,
@@ -240,11 +240,11 @@ export class GeminiRunner implements AgentRunner {
     ];
 
     const sessionInfo = options?.sessionId
-      ? ` (session: ${options.sessionId.slice(0, 8)}...)`
-      : ' (new)';
-    console.log(`[gemini] Streaming in ${this.workdir || 'default dir'}${sessionInfo}`);
+      ? ` (会话: ${options.sessionId.slice(0, 8)}...)`
+      : ' (新会话)';
+    console.log(`[gemini] 在 ${this.workdir || '默认目录'} 中流式执行${sessionInfo}`);
 
-    // トランスクリプトログ: 送信プロンプトを記録
+    // 转录日志：记录发送的提示词
     if (options?.appSessionId && this.workdir) {
       logPrompt(this.workdir, options.appSessionId, fullPrompt);
     }
@@ -252,9 +252,9 @@ export class GeminiRunner implements AgentRunner {
     try {
       return await this.executeStream(args, callbacks, options?.channelId, options?.appSessionId);
     } catch (err) {
-      // セッションresume失敗時は新規セッションでリトライ
+      // 会话恢复失败时，使用新会话重试
       if (options?.sessionId && err instanceof Error && err.message.includes('exited with code')) {
-        console.warn(`[gemini] Session resume failed, retrying without session: ${err.message}`);
+        console.warn(`[gemini] 会话恢复失败，将在无会话情况下重试: ${err.message}`);
         const retryArgs = [
           ...this.buildBaseArgs({ ...options, sessionId: undefined }),
           '--prompt',
@@ -301,37 +301,37 @@ export class GeminiRunner implements AgentRunner {
           try {
             const json = JSON.parse(line) as GeminiStreamEvent;
 
-            // セッションID取得（initイベントで返る）
+            // 获取会话 ID（在 init 事件中返回）
             if (json.type === 'init' && json.session_id) {
               sessionId = json.session_id;
             }
 
-            // アシスタントのメッセージ（delta）
+            // 助手的消息（delta）
             if (json.type === 'message' && json.role === 'assistant' && json.content) {
               fullText += json.content;
               callbacks.onText?.(json.content, fullText);
             }
 
-            // 結果
+            // 结果
             if (json.type === 'result') {
               if (json.session_id) {
                 sessionId = json.session_id;
               }
               if (json.status === 'error') {
-                const error = new Error('Gemini CLI returned error');
+                const error = new Error('Gemini CLI 返回错误');
                 callbacks.onError?.(error);
                 reject(error);
                 return;
               }
-              // トークン使用量ログ
+              // 记录 Token 使用量
               if (json.stats) {
                 console.log(
-                  `[gemini] Usage: input=${json.stats.input_tokens ?? 0}, output=${json.stats.output_tokens ?? 0}, cached=${json.stats.cached ?? 0}, duration=${json.stats.duration_ms ?? 0}ms`
+                  `[gemini] 使用量: input=${json.stats.input_tokens ?? 0}, output=${json.stats.output_tokens ?? 0}, cached=${json.stats.cached ?? 0}, duration=${json.stats.duration_ms ?? 0}ms`
                 );
               }
             }
           } catch {
-            // JSONパースエラーは無視
+            // 忽略 JSON 解析错误
           }
         }
       });
@@ -343,7 +343,7 @@ export class GeminiRunner implements AgentRunner {
       const timeout = setTimeout(() => {
         proc.kill();
         this.currentProcess = null;
-        const error = new Error(`Gemini CLI timed out after ${this.timeoutMs}ms`);
+        const error = new Error(`Gemini CLI 超时（${this.timeoutMs}ms）`);
         callbacks.onError?.(error);
         reject(error);
       }, this.timeoutMs);
@@ -352,7 +352,7 @@ export class GeminiRunner implements AgentRunner {
         clearTimeout(timeout);
         this.currentProcess = null;
 
-        // 残りのバッファを処理
+        // 处理剩余的缓冲区
         if (buffer.trim()) {
           try {
             const json = JSON.parse(buffer) as GeminiStreamEvent;
@@ -366,12 +366,12 @@ export class GeminiRunner implements AgentRunner {
               sessionId = json.session_id;
             }
           } catch {
-            // JSONパースエラーは無視
+            // 忽略 JSON 解析错误
           }
         }
 
         if (code !== 0) {
-          const error = new Error(`Gemini CLI exited with code ${code}`);
+          const error = new Error(`Gemini CLI 退出，代码 ${code}`);
           callbacks.onError?.(error);
           reject(error);
           return;
@@ -379,7 +379,7 @@ export class GeminiRunner implements AgentRunner {
 
         const result: RunResult = { result: fullText, sessionId };
 
-        // トランスクリプトログ: 応答を記録
+        // 转录日志：记录响应
         if (appSessionId && this.workdir) {
           logResponse(this.workdir, appSessionId, { result: fullText, sessionId });
         }
@@ -391,7 +391,7 @@ export class GeminiRunner implements AgentRunner {
       proc.on('error', (err) => {
         clearTimeout(timeout);
         this.currentProcess = null;
-        const error = new Error(`Failed to spawn Gemini CLI: ${err.message}`);
+        const error = new Error(`无法启动 Gemini CLI: ${err.message}`);
         callbacks.onError?.(error);
         reject(error);
       });
@@ -399,14 +399,14 @@ export class GeminiRunner implements AgentRunner {
   }
 
   /**
-   * 現在処理中のリクエストをキャンセル
+   * 取消当前正在处理的请求
    */
   cancel(): boolean {
     if (!this.currentProcess) {
       return false;
     }
 
-    console.log('[gemini] Cancelling current request');
+    console.log('[gemini] 正在取消当前请求');
     this.currentProcess.kill();
     this.currentProcess = null;
     return true;
