@@ -8,13 +8,13 @@ const DOWNLOAD_DIR = path.join(
   'attachments'
 );
 
-// ダウンロードディレクトリを作成
+// 创建下载目录
 if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 }
 
 /**
- * URLからファイルをダウンロードして一時ファイルに保存
+ * 从 URL 下载文件并保存到临时文件
  */
 export async function downloadFile(
   url: string,
@@ -28,23 +28,23 @@ export async function downloadFile(
   const response = await fetch(url, { headers });
 
   if (!response.ok) {
-    throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+    throw new Error(`下载文件失败: ${response.status} ${response.statusText}`);
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
   fs.writeFileSync(filePath, buffer);
-  console.log(`[xangi] Downloaded attachment: ${filename} → ${filePath} (${buffer.length} bytes)`);
+  console.log(`[xangi] 已下载附件: ${filename} → ${filePath} (${buffer.length} 字节)`);
   return filePath;
 }
 
 /**
- * Agent結果からファイルパスを抽出
- * パターン: MEDIA:/path/to/file または [ファイル](/path/to/file)
+ * 从 Agent 结果中提取文件路径
+ * 模式: MEDIA:/path/to/file 或 [文件](/path/to/file)
  */
 export function extractFilePaths(text: string): string[] {
   const paths: string[] = [];
 
-  // MEDIA:/path/to/file パターン
+  // MEDIA:/path/to/file 模式
   const mediaPattern = /MEDIA:\s*([^\s\n]+)/g;
   let match;
   while ((match = mediaPattern.exec(text)) !== null) {
@@ -54,7 +54,7 @@ export function extractFilePaths(text: string): string[] {
     }
   }
 
-  // 絶対パスパターン（画像/音声/動画の拡張子を持つもの）
+  // 绝对路径模式（具有图片/音频/视频扩展名的文件）
   const absPathPattern =
     /(?:^|\s)(\/[^\s]+\.(?:png|jpg|jpeg|gif|webp|mp3|mp4|wav|flac|pdf|zip))/gim;
   while ((match = absPathPattern.exec(text)) !== null) {
@@ -68,7 +68,7 @@ export function extractFilePaths(text: string): string[] {
 }
 
 /**
- * テキストからファイルパス部分を除去して表示用テキストを返す
+ * 从文本中移除文件路径部分，返回用于显示的文本
  */
 export function stripFilePaths(text: string): string {
   return text
@@ -78,11 +78,11 @@ export function stripFilePaths(text: string): string {
 }
 
 /**
- * 添付ファイル情報をプロンプトに追加
+ * 将附件信息添加到提示词中
  */
 export function buildPromptWithAttachments(prompt: string, filePaths: string[]): string {
   if (filePaths.length === 0) return prompt;
 
   const fileList = filePaths.map((p) => `  - ${p}`).join('\n');
-  return `${prompt}\n\n[添付ファイル]\n${fileList}`;
+  return `${prompt}\n\n[附件]\n${fileList}`;
 }
