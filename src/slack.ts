@@ -15,7 +15,7 @@ import { loadSettings, saveSettings, formatSettings } from './settings.js';
 import { STREAM_UPDATE_INTERVAL_MS } from './constants.js';
 import type { KnownBlock } from '@slack/types';
 
-/** Slack Block Kit: Stopボタン */
+/** Slack Block Kit: Stop 按钮 */
 function createSlackStopBlocks(): KnownBlock[] {
   return [
     {
@@ -32,7 +32,7 @@ function createSlackStopBlocks(): KnownBlock[] {
   ];
 }
 
-/** Slack Block Kit: New Sessionボタン */
+/** Slack Block Kit: New Session 按钮 */
 function createSlackCompletedBlocks(): KnownBlock[] {
   return [
     {
@@ -48,25 +48,25 @@ function createSlackCompletedBlocks(): KnownBlock[] {
   ];
 }
 
-// セッション管理（チャンネルID → セッションID）
+// 会话管理（频道 ID → 会话 ID）
 const sessions = new Map<string, string>();
 
-// 最後のBotメッセージ（チャンネルID → メッセージts）
+// 最后一条 Bot 消息（频道 ID → 消息 ts）
 const lastBotMessages = new Map<string, string>();
 
-// Slack メッセージバイト数制限（chat.updateはバイト数で制限される）
+// Slack 消息字节数限制（chat.update 受字节数限制）
 const SLACK_MAX_TEXT_BYTES = 3900;
 
 /**
- * 文字列をUTF-8バイト数で安全に切り詰める
- * マルチバイト文字の途中で切れないように処理
+ * 按 UTF-8 字节数安全地截断字符串
+ * 处理多字节字符，避免在中间切断
  */
 function sliceByBytes(str: string, maxBytes: number): string {
   const encoder = new TextEncoder();
   if (encoder.encode(str).length <= maxBytes) {
     return str;
   }
-  // バイナリサーチで最大文字位置を見つける
+  // 二分查找最大字符位置
   let lo = 0;
   let hi = str.length;
   while (lo < hi) {
@@ -80,7 +80,7 @@ function sliceByBytes(str: string, maxBytes: number): string {
   return str.slice(0, lo);
 }
 
-// 結果送信（長い場合は分割）
+// 发送结果（长文本时分段发送）
 async function sendSlackResult(
   client: WebClient,
   channelId: string,
@@ -91,7 +91,7 @@ async function sendSlackResult(
   const text = sliceByBytes(result, SLACK_MAX_TEXT_BYTES);
   const textBytes = new TextEncoder().encode(text).length;
   console.log(
-    `[slack] sendSlackResult: textChars=${text.length}, textBytes=${textBytes}, resultChars=${result.length}`
+    `[slack] sendSlackResult: 文本字符数=${text.length}, 文本字节数=${textBytes}, 结果字符数=${result.length}`
   );
 
   try {
@@ -101,12 +101,12 @@ async function sendSlackResult(
       text,
     });
 
-    // 残りのテキストがあれば分割送信
+    // 如果有剩余文本，分段发送
     if (text.length < result.length) {
       const remaining = result.slice(text.length);
       const chunks = splitTextByBytes(remaining, SLACK_MAX_TEXT_BYTES);
       console.log(
-        `[slack] Sending remaining ${chunks.length} chunks (${remaining.length} chars left)`
+        `[slack] 发送剩余 ${chunks.length} 个片段（剩余 ${remaining.length} 字符）`
       );
       for (const chunk of chunks) {
         await client.chat.postMessage({
@@ -118,33 +118,33 @@ async function sendSlackResult(
     }
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error('[slack] Failed to update final message:', errorMessage);
+    console.error('[slack] 更新最终消息失败:', errorMessage);
 
     if (errorMessage.includes('msg_too_long')) {
-      console.log(`[slack] Fallback: trying shorter text (2000 bytes)`);
-      // テキストを短くしてリトライ
+      console.log(`[slack] 回退: 尝试更短的文本 (2000 字节)`);
+      // 使用更短的文本重试
       try {
         await client.chat.update({
           channel: channelId,
           ts: messageTs,
           text: sliceByBytes(result, 2000),
         });
-        console.log(`[slack] Fallback: short update succeeded`);
+        console.log(`[slack] 回退: 短文本更新成功`);
       } catch {
-        console.log(`[slack] Fallback: short update failed, using placeholder`);
-        // それでもダメなら新規メッセージとして投稿
+        console.log(`[slack] 回退: 短文本更新失败，使用占位符`);
+        // 仍然失败，则作为新消息发送
         await client.chat
           .update({
             channel: channelId,
             ts: messageTs,
-            text: '（長文のため別メッセージで送信）',
+            text: '（文本过长，已作为单独消息发送）',
           })
           .catch(() => {});
       }
 
-      // 残りを分割送信
+      // 分段发送剩余内容
       const chunks = splitTextByBytes(result, SLACK_MAX_TEXT_BYTES);
-      console.log(`[slack] Fallback: sending ${chunks.length} chunks`);
+      console.log(`[slack] 回退: 发送 ${chunks.length} 个片段`);
       for (const chunk of chunks) {
         await client.chat.postMessage({
           channel: channelId,
@@ -152,15 +152,15 @@ async function sendSlackResult(
           ...(threadTs && { thread_ts: threadTs }),
         });
       }
-      console.log(`[slack] Fallback: all chunks sent`);
+      console.log(`[slack] 回退: 所有片段已发送`);
     } else {
-      // その他のエラーは再throw
+      // 其他错误重新抛出
       throw err;
     }
   }
 }
 
-// テキストをバイト数で分割
+// 按字节数分割文本
 function splitTextByBytes(text: string, maxBytes: number): string[] {
   const chunks: string[] = [];
   let remaining = text;
@@ -172,9 +172,9 @@ function splitTextByBytes(text: string, maxBytes: number): string[] {
   return chunks;
 }
 
-// メッセージ削除の共通関数
+// 删除消息的公共函数
 /**
- * AIの応答から SYSTEM_COMMAND: を検知して実行
+ * 检测 AI 响应中的 SYSTEM_COMMAND: 并执行
  */
 function handleSystemCommands(text: string): void {
   const commands = text.match(/^SYSTEM_COMMAND:(.+)$/gm);
@@ -186,10 +186,10 @@ function handleSystemCommands(text: string): void {
     if (action === 'restart') {
       const settings = loadSettings();
       if (!settings.autoRestart) {
-        console.log('[slack] Restart requested but autoRestart is disabled');
+        console.log('[slack] 请求重启但 autoRestart 已禁用');
         continue;
       }
-      console.log('[slack] Restart requested by agent, restarting in 1s...');
+      console.log('[slack] Agent 请求重启，1秒后重启...');
       setTimeout(() => process.exit(0), 1000);
       return;
     }
@@ -200,7 +200,7 @@ function handleSystemCommands(text: string): void {
       if (key === 'autoRestart') {
         const enabled = value === 'true';
         saveSettings({ autoRestart: enabled });
-        console.log(`[slack] autoRestart ${enabled ? 'enabled' : 'disabled'} by agent`);
+        console.log(`[slack] Agent 已将 autoRestart 设为 ${enabled ? '启用' : '禁用'}`);
       }
     }
   }
@@ -210,19 +210,19 @@ async function deleteMessage(client: WebClient, channelId: string, arg: string):
   let messageTs: string | undefined;
 
   if (arg) {
-    // 引数がある場合: ts または メッセージリンクから抽出
+    // 有参数时：从 ts 或消息链接中提取
     const linkMatch = arg.match(/\/p(\d{10})(\d{6})/);
     if (linkMatch) {
       messageTs = `${linkMatch[1]}.${linkMatch[2]}`;
     } else if (/^\d+\.\d+$/.test(arg)) {
       messageTs = arg;
     } else {
-      return '無効な形式です。メッセージリンクまたは ts を指定してください';
+      return '格式无效。请指定消息链接或 ts';
     }
   } else {
     messageTs = lastBotMessages.get(channelId);
     if (!messageTs) {
-      return '削除できるメッセージがありません';
+      return '没有可删除的消息';
     }
   }
 
@@ -234,10 +234,10 @@ async function deleteMessage(client: WebClient, channelId: string, arg: string):
     if (!arg) {
       lastBotMessages.delete(channelId);
     }
-    return '🗑️ メッセージを削除しました';
+    return '🗑️ 消息已删除';
   } catch (err) {
-    console.error('[slack] Failed to delete message:', err);
-    return 'メッセージの削除に失敗しました';
+    console.error('[slack] 删除消息失败:', err);
+    return '删除消息失败';
   }
 }
 
@@ -256,7 +256,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
   let { skills } = options;
 
   if (!config.slack.botToken || !config.slack.appToken) {
-    throw new Error('Slack tokens not configured');
+    throw new Error('Slack 令牌未配置');
   }
 
   const app = new App({
@@ -266,7 +266,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     logLevel: LogLevel.INFO,
   });
 
-  // ボタンアクション: Stop
+  // 按钮操作: Stop
   app.action('xangi_stop', async ({ ack, body }) => {
     await ack();
     const channelId = body.channel?.id;
@@ -281,11 +281,11 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     }
     const stopped = processManager.stop(channelId) || agentRunner.cancel?.(channelId) || false;
     if (!stopped) {
-      console.log(`[slack] No running task to stop for channel ${channelId}`);
+      console.log(`[slack] 频道 ${channelId} 没有正在运行的任务需要停止`);
     }
   });
 
-  // ボタンアクション: New Session
+  // 按钮操作: New Session
   app.action('xangi_new', async ({ ack, body, client: actionClient }) => {
     await ack();
     const channelId = body.channel?.id;
@@ -300,7 +300,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     }
     sessions.delete(channelId);
     agentRunner.destroy?.(channelId);
-    // ボタンを消す
+    // 移除按钮
     if ('message' in body && body.message) {
       await actionClient.chat
         .update({
@@ -313,20 +313,20 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     }
   });
 
-  // メンション時の処理
+  // 处理 @提及 事件
   app.event('app_mention', async ({ event, say, client }) => {
     const userId = event.user;
     if (!userId) return;
 
-    // 許可リストチェック
+    // 权限列表检查
     if (!config.slack.allowedUsers?.includes('*') && !config.slack.allowedUsers?.includes(userId)) {
-      console.log(`[slack] Unauthorized user: ${userId}`);
+      console.log(`[slack] 未授权用户: ${userId}`);
       return;
     }
 
     let text = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
 
-    // 添付ファイルをダウンロード
+    // 下载附件
     const attachmentPaths: string[] = [];
     const files = (event as unknown as Record<string, unknown>).files as
       | Array<{ url_private_download?: string; name?: string }>
@@ -340,39 +340,39 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
             });
             attachmentPaths.push(filePath);
           } catch (err) {
-            console.error(`[slack] Failed to download attachment: ${file.name}`, err);
+            console.error(`[slack] 下载附件失败: ${file.name}`, err);
           }
         }
       }
     }
 
     if (!text && attachmentPaths.length === 0) return;
-    text = buildPromptWithAttachments(text || '添付ファイルを確認してください', attachmentPaths);
+    text = buildPromptWithAttachments(text || '请检查附件', attachmentPaths);
 
     const channelId = event.channel;
     const threadTs = config.slack.replyInThread ? event.thread_ts || event.ts : undefined;
 
-    // セッションクリアコマンド
+    // 会话清除命令
     if (['!new', 'new', '/new', '!clear', 'clear', '/clear'].includes(text)) {
       sessions.delete(channelId);
       await say({
-        text: '🆕 新しいセッションを開始しました',
+        text: '🆕 已开始新会话',
         ...(threadTs && { thread_ts: threadTs }),
       });
       return;
     }
 
-    // 停止コマンド
+    // 停止命令
     if (['!stop', 'stop', '/stop'].includes(text)) {
       const stopped = processManager.stop(channelId) || agentRunner.cancel?.(channelId) || false;
       await say({
-        text: stopped ? '🛑 タスクを停止しました' : '実行中のタスクはありません',
+        text: stopped ? '🛑 任务已停止' : '没有正在运行的任务',
         ...(threadTs && { thread_ts: threadTs }),
       });
       return;
     }
 
-    // 削除コマンド
+    // 删除命令
     if (text === '!delete' || text === 'delete' || text.startsWith('!delete ')) {
       const arg = text.replace(/^!?delete\s*/, '').trim();
       const result = await deleteMessage(client, channelId, arg);
@@ -383,7 +383,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       return;
     }
 
-    // 👀 リアクション追加
+    // 👀 添加反应
     await client.reactions
       .add({
         channel: channelId,
@@ -391,15 +391,15 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
         name: 'eyes',
       })
       .catch((err) => {
-        console.error('[slack] Failed to add reaction:', err.message || err);
+        console.error('[slack] 添加反应失败:', err.message || err);
       });
 
     await processMessage(channelId, threadTs, text, event.ts, client, agentRunner, config);
   });
 
-  // DMの処理 + autoReplyChannels
+  // 处理 DM 和 autoReplyChannels 中的消息
   app.event('message', async ({ event, say, client }) => {
-    // botのメッセージは無視
+    // 忽略 bot 消息
     if ('bot_id' in event || !('user' in event)) return;
 
     const messageEvent = event as {
@@ -413,39 +413,39 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     };
 
     console.log(
-      `[slack] Message event: channel=${messageEvent.channel}, type=${messageEvent.channel_type}, autoReplyChannels=${config.slack.autoReplyChannels?.join(',')}`
+      `[slack] 消息事件: 频道=${messageEvent.channel}, 类型=${messageEvent.channel_type}, autoReplyChannels=${config.slack.autoReplyChannels?.join(',')}`
     );
 
-    // DM, autoReplyChannels, またはスレッド内返信を処理
+    // 处理 DM、autoReplyChannels 或线程内回复
     const isDM = messageEvent.channel_type === 'im';
     const isAutoReplyChannel = config.slack.autoReplyChannels?.includes(messageEvent.channel);
     const isThreadReply = !!messageEvent.thread_ts;
     if (!isDM && !isAutoReplyChannel && !isThreadReply) {
       console.log(
-        `[slack] Skipping: isDM=${isDM}, isAutoReplyChannel=${isAutoReplyChannel}, isThread=${isThreadReply}`
+        `[slack] 跳过: isDM=${isDM}, isAutoReplyChannel=${isAutoReplyChannel}, 是线程=${isThreadReply}`
       );
       return;
     }
 
-    // autoReplyChannels でメンション付きメッセージは app_mention で処理済みなのでスキップ
+    // autoReplyChannels 中带 @提及 的消息已由 app_mention 处理，跳过
     const textRaw = messageEvent.text || '';
     if (isAutoReplyChannel && !isThreadReply && /<@[A-Z0-9]+>/i.test(textRaw)) {
-      console.log(`[slack] Skipping mention in autoReplyChannel (handled by app_mention)`);
+      console.log(`[slack] 跳过 autoReplyChannel 中的提及消息（由 app_mention 处理）`);
       return;
     }
 
-    // 許可リストチェック
+    // 权限列表检查
     if (
       !config.slack.allowedUsers?.includes('*') &&
       !config.slack.allowedUsers?.includes(messageEvent.user)
     ) {
-      console.log(`[slack] Unauthorized user: ${messageEvent.user}`);
+      console.log(`[slack] 未授权用户: ${messageEvent.user}`);
       return;
     }
 
     let text = messageEvent.text || '';
 
-    // 添付ファイルをダウンロード
+    // 下载附件
     const dmAttachmentPaths: string[] = [];
     if (messageEvent.files && messageEvent.files.length > 0) {
       for (const file of messageEvent.files) {
@@ -456,39 +456,39 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
             });
             dmAttachmentPaths.push(filePath);
           } catch (err) {
-            console.error(`[slack] Failed to download attachment: ${file.name}`, err);
+            console.error(`[slack] 下载附件失败: ${file.name}`, err);
           }
         }
       }
     }
 
     if (!text && dmAttachmentPaths.length === 0) return;
-    text = buildPromptWithAttachments(text || '添付ファイルを確認してください', dmAttachmentPaths);
+    text = buildPromptWithAttachments(text || '请检查附件', dmAttachmentPaths);
 
     const channelId = messageEvent.channel;
     const threadTs = config.slack.replyInThread ? messageEvent.ts : undefined;
 
-    // セッションクリアコマンド
+    // 会话清除命令
     if (['!new', 'new', '/new', '!clear', 'clear', '/clear'].includes(text)) {
       sessions.delete(channelId);
       await say({
-        text: '🆕 新しいセッションを開始しました',
+        text: '🆕 已开始新会话',
         ...(threadTs && { thread_ts: threadTs }),
       });
       return;
     }
 
-    // 停止コマンド
+    // 停止命令
     if (['!stop', 'stop', '/stop'].includes(text)) {
       const stopped = processManager.stop(channelId) || agentRunner.cancel?.(channelId) || false;
       await say({
-        text: stopped ? '🛑 タスクを停止しました' : '実行中のタスクはありません',
+        text: stopped ? '🛑 任务已停止' : '没有正在运行的任务',
         ...(threadTs && { thread_ts: threadTs }),
       });
       return;
     }
 
-    // 削除コマンド
+    // 删除命令
     if (text === '!delete' || text === 'delete' || text.startsWith('!delete ')) {
       const arg = text.replace(/^!?delete\s*/, '').trim();
       const result = await deleteMessage(client, channelId, arg);
@@ -499,7 +499,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       return;
     }
 
-    // 👀 リアクション追加
+    // 👀 添加反应
     await client.reactions
       .add({
         channel: channelId,
@@ -507,13 +507,13 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
         name: 'eyes',
       })
       .catch((err) => {
-        console.error('[slack] Failed to add reaction:', err.message || err);
+        console.error('[slack] 添加反应失败:', err.message || err);
       });
 
     await processMessage(channelId, threadTs, text, messageEvent.ts, client, agentRunner, config);
   });
 
-  // /new コマンド
+  // /new 命令
   app.command('/new', async ({ command, ack, respond }) => {
     await ack();
 
@@ -521,15 +521,15 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       !config.slack.allowedUsers?.includes('*') &&
       !config.slack.allowedUsers?.includes(command.user_id)
     ) {
-      await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
+      await respond({ text: '未授权的用户', response_type: 'ephemeral' });
       return;
     }
 
     sessions.delete(command.channel_id);
-    await respond({ text: '🆕 新しいセッションを開始しました' });
+    await respond({ text: '🆕 已开始新会话' });
   });
 
-  // /skills コマンド
+  // /skills 命令
   app.command('/skills', async ({ command, ack, respond }) => {
     await ack();
 
@@ -537,7 +537,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       !config.slack.allowedUsers?.includes('*') &&
       !config.slack.allowedUsers?.includes(command.user_id)
     ) {
-      await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
+      await respond({ text: '未授权的用户', response_type: 'ephemeral' });
       return;
     }
 
@@ -545,9 +545,9 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     await respond({ text: formatSkillList(skills) });
   });
 
-  // /delete コマンド（Botメッセージを削除）
-  // /delete → 直前のメッセージ
-  // /delete <ts> → 指定のメッセージ（tsまたはメッセージリンクから抽出）
+  // /delete 命令（删除 Bot 消息）
+  // /delete → 删除上一条消息
+  // /delete <ts> → 删除指定消息（从 ts 或消息链接中提取）
   app.command('/delete', async ({ command, ack, respond, client }) => {
     await ack();
 
@@ -555,7 +555,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       !config.slack.allowedUsers?.includes('*') &&
       !config.slack.allowedUsers?.includes(command.user_id)
     ) {
-      await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
+      await respond({ text: '未授权的用户', response_type: 'ephemeral' });
       return;
     }
 
@@ -563,7 +563,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     await respond({ text: result, response_type: 'ephemeral' });
   });
 
-  // /skill コマンド
+  // /skill 命令
   app.command('/skill', async ({ command, ack, respond }) => {
     await ack();
 
@@ -571,7 +571,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       !config.slack.allowedUsers?.includes('*') &&
       !config.slack.allowedUsers?.includes(command.user_id)
     ) {
-      await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
+      await respond({ text: '未授权的用户', response_type: 'ephemeral' });
       return;
     }
 
@@ -580,7 +580,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     const skillArgs = args.slice(1).join(' ');
 
     if (!skillName) {
-      await respond({ text: '使い方: `/skill <スキル名> [引数]`' });
+      await respond({ text: '使用方法: `/skill <技能名> [参数]`' });
       return;
     }
 
@@ -588,7 +588,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     const skipPermissions = config.agent.config.skipPermissions ?? false;
 
     try {
-      const prompt = `スキル「${skillName}」を実行してください。${skillArgs ? `引数: ${skillArgs}` : ''}`;
+      const prompt = `请执行技能「${skillName}」。${skillArgs ? `参数: ${skillArgs}` : ''}`;
       const sessionId = sessions.get(channelId);
       const { result, sessionId: newSessionId } = await agentRunner.run(prompt, {
         skipPermissions,
@@ -599,12 +599,12 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       sessions.set(channelId, newSessionId);
       await respond({ text: sliceByBytes(result, SLACK_MAX_TEXT_BYTES) });
     } catch (error) {
-      console.error('[slack] Error:', error);
-      await respond({ text: 'エラーが発生しました' });
+      console.error('[slack] 错误:', error);
+      await respond({ text: '发生错误' });
     }
   });
 
-  // /settings コマンド
+  // /settings 命令
   app.command('/settings', async ({ command, ack, respond }) => {
     await ack();
 
@@ -612,7 +612,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       !config.slack.allowedUsers?.includes('*') &&
       !config.slack.allowedUsers?.includes(command.user_id)
     ) {
-      await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
+      await respond({ text: '未授权的用户', response_type: 'ephemeral' });
       return;
     }
 
@@ -620,7 +620,7 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
     await respond({ text: formatSettings(settings) });
   });
 
-  // /restart コマンド
+  // /restart 命令
   app.command('/restart', async ({ command, ack, respond }) => {
     await ack();
 
@@ -628,23 +628,23 @@ export async function startSlackBot(options: SlackChannelOptions): Promise<void>
       !config.slack.allowedUsers?.includes('*') &&
       !config.slack.allowedUsers?.includes(command.user_id)
     ) {
-      await respond({ text: '許可されていないユーザーです', response_type: 'ephemeral' });
+      await respond({ text: '未授权的用户', response_type: 'ephemeral' });
       return;
     }
 
     const settings = loadSettings();
     if (!settings.autoRestart) {
-      await respond({ text: '⚠️ 自動再起動が無効です。先に有効にしてください。' });
+      await respond({ text: '⚠️ 自动重启已禁用。请先启用。' });
       return;
     }
-    await respond({ text: '🔄 再起動します...' });
+    await respond({ text: '🔄 正在重启...' });
     setTimeout(() => process.exit(0), 1000);
   });
 
   await app.start();
-  console.log('[slack] ⚡️ Slack bot is running!');
+  console.log('[slack] ⚡️ Slack bot 正在运行！');
 
-  // スケジューラにSlack送信関数を登録
+  // 向调度器注册 Slack 发送函数
   if (options.scheduler) {
     options.scheduler.registerSender('slack', async (channelId, msg) => {
       await app.client.chat.postMessage({
@@ -667,31 +667,31 @@ async function processMessage(
   const skipPermissions = config.agent.config.skipPermissions ?? false;
   let prompt = text;
 
-  // スキップ設定
+  // 跳过权限设置
   if (prompt.startsWith('!skip')) {
     prompt = prompt.replace(/^!skip\s*/, '').trim();
   }
 
-  // プラットフォーム情報をプロンプトに注入
-  prompt = `[プラットフォーム: Slack]\n[チャンネル: ${channelId}]\n${prompt}`;
+  // 将平台信息注入提示词
+  prompt = `[平台: Slack]\n[频道: ${channelId}]\n${prompt}`;
 
   let messageTs = '';
   try {
-    console.log(`[slack] Processing message in channel ${channelId}`);
+    console.log(`[slack] 正在处理频道 ${channelId} 中的消息`);
 
     const sessionId = sessions.get(channelId);
     const useStreaming = config.slack.streaming ?? true;
     const showThinking = config.slack.showThinking ?? true;
 
-    // 最初のメッセージを送信（Stopボタン付き）
+    // 发送初始消息（带 Stop 按钮）
     const showButtons = config.slack.showThinking ?? true;
     const initialResponse = await client.chat.postMessage({
       channel: channelId,
-      text: '🤔 考え中.',
+      text: '🤔 思考中.',
       ...(threadTs && { thread_ts: threadTs }),
       ...(showButtons && {
         blocks: [
-          { type: 'section' as const, text: { type: 'mrkdwn' as const, text: '🤔 考え中.' } },
+          { type: 'section' as const, text: { type: 'mrkdwn' as const, text: '🤔 思考中.' } },
           ...createSlackStopBlocks(),
         ],
       }),
@@ -699,28 +699,28 @@ async function processMessage(
 
     messageTs = initialResponse.ts ?? '';
     if (!messageTs) {
-      throw new Error('Failed to get message timestamp');
+      throw new Error('无法获取消息时间戳');
     }
 
-    // 最後のBotメッセージを保存
+    // 保存最后一条 Bot 消息
     lastBotMessages.set(channelId, messageTs);
 
     let result: string;
     let newSessionId: string;
 
     if (useStreaming && showThinking) {
-      // ストリーミング + 思考表示モード
+      // 流式 + 思考显示模式
       let lastUpdateTime = 0;
       let pendingUpdate = false;
       let firstTextReceived = false;
 
-      // テキスト到着前の考え中アニメーション
+      // 文本到达前的思考动画
       let dotCount = 1;
       const thinkingInterval = setInterval(() => {
         if (firstTextReceived) return;
         dotCount = (dotCount % 3) + 1;
         const dots = '.'.repeat(dotCount);
-        const thinkingText = `🤔 考え中${dots}`;
+        const thinkingText = `🤔 思考中${dots}`;
         client.chat
           .update({
             channel: channelId,
@@ -753,7 +753,7 @@ async function processMessage(
                 const streamText = sliceByBytes(fullText, SLACK_MAX_TEXT_BYTES - 10) + ' ▌';
                 const streamBytes = new TextEncoder().encode(streamText).length;
                 console.log(
-                  `[slack] stream update: chars=${streamText.length}, bytes=${streamBytes}`
+                  `[slack] 流式更新: 字符数=${streamText.length}, 字节数=${streamBytes}`
                 );
                 client.chat
                   .update({
@@ -763,7 +763,7 @@ async function processMessage(
                   })
                   .catch((err) => {
                     console.error(
-                      `[slack] Failed to update message (bytes=${streamBytes}):`,
+                      `[slack] 更新消息失败 (字节数=${streamBytes}):`,
                       err.message
                     );
                   })
@@ -781,13 +781,13 @@ async function processMessage(
       result = streamResult.result;
       newSessionId = streamResult.sessionId;
     } else {
-      // 非ストリーミング or 思考非表示モード
-      // 考え中アニメーション
+      // 非流式或思考隐藏模式
+      // 思考动画
       let dotCount = 1;
       const thinkingInterval = setInterval(() => {
         dotCount = (dotCount % 3) + 1;
         const dots = '.'.repeat(dotCount);
-        const thinkingText = `🤔 考え中${dots}`;
+        const thinkingText = `🤔 思考中${dots}`;
         client.chat
           .update({
             channel: channelId,
@@ -813,22 +813,22 @@ async function processMessage(
     }
 
     sessions.set(channelId, newSessionId);
-    console.log(`[slack] Final result length: ${result.length}`);
+    console.log(`[slack] 最终结果长度: ${result.length}`);
 
-    // ファイルパスを抽出して添付送信
+    // 提取文件路径并发送附件
     const filePaths = extractFilePaths(result);
     let displayText = filePaths.length > 0 ? stripFilePaths(result) : result;
 
-    // SYSTEM_COMMAND: 行を表示テキストから除去
+    // 从显示文本中移除 SYSTEM_COMMAND: 行
     displayText = displayText.replace(/^SYSTEM_COMMAND:.+$/gm, '').trim();
 
-    // SYSTEM_COMMAND: を検知して実行
+    // 检测并执行 SYSTEM_COMMAND:
     handleSystemCommands(result);
 
-    // 最終結果を更新（長い場合は分割送信）
+    // 更新最终结果（长文本时分段发送）
     await sendSlackResult(client, channelId, messageTs, threadTs, displayText || '✅');
 
-    // 完了後: StopボタンをNewボタンに切り替え
+    // 完成后：将 Stop 按钮替换为 New 按钮
     if (showButtons) {
       await client.chat
         .update({
@@ -862,35 +862,35 @@ async function processMessage(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await client.filesUploadV2(uploadArgs as any);
         }
-        console.log(`[slack] Sent ${filePaths.length} file(s)`);
+        console.log(`[slack] 已发送 ${filePaths.length} 个文件`);
       } catch (err) {
-        console.error('[slack] Failed to upload files:', err);
+        console.error('[slack] 上传文件失败:', err);
       }
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     if (errorMsg.includes('Request cancelled by user')) {
-      console.log('[slack] Request cancelled by user');
+      console.log('[slack] 用户取消了请求');
       if (messageTs) {
         await client.chat
           .update({
             channel: channelId,
             ts: messageTs,
-            text: '🛑 停止しました',
+            text: '🛑 已停止',
             blocks: [],
           })
           .catch(() => {});
       }
     } else {
-      console.error('[slack] Error:', error);
+      console.error('[slack] 错误:', error);
       await client.chat.postMessage({
         channel: channelId,
-        text: `エラーが発生しました: ${errorMsg.slice(0, 200)}`,
+        text: `发生错误: ${errorMsg.slice(0, 200)}`,
         ...(threadTs && { thread_ts: threadTs }),
       });
     }
   } finally {
-    // 👀 リアクションを削除
+    // 👀 移除反应
     await client.reactions
       .remove({
         channel: channelId,
@@ -898,7 +898,7 @@ async function processMessage(
         name: 'eyes',
       })
       .catch((err) => {
-        console.error('[slack] Failed to remove reaction:', err.message || err);
+        console.error('[slack] 移除反应失败:', err.message || err);
       });
   }
 }
