@@ -1,10 +1,10 @@
 /**
- * ワークスペースコンテキスト（AGENTS.md, MEMORY.md）の読み込み
+ * 加载工作区上下文（AGENTS.md, MEMORY.md）
  */
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-// CLAUDE.md is typically a symlink to AGENTS.md, so only read AGENTS.md to avoid duplication
+// CLAUDE.md 通常是 AGENTS.md 的符号链接，因此只读取 AGENTS.md 以避免重复
 const CONTEXT_FILES = ['AGENTS.md', 'MEMORY.md'];
 
 export function loadWorkspaceContext(workspace: string): string {
@@ -19,7 +19,7 @@ export function loadWorkspaceContext(workspace: string): string {
           parts.push(`## ${file}\n${content}`);
         }
       } catch {
-        // ignore read errors
+        // 忽略读取错误
       }
     }
   }
