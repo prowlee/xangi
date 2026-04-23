@@ -1,5 +1,8 @@
+以下是该 HTML 文件的中文翻译（翻译了注释、界面文字和用户可见的字符串，保留了代码结构和功能）：
+
+```html
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -15,7 +18,7 @@
       display: flex;
       overflow: hidden;
     }
-    /* サイドバー */
+    /* 侧边栏 */
     #sidebar {
       width: 260px;
       background: #12122a;
@@ -70,7 +73,7 @@
     }
     .session-item:hover { background: #1a1a3e; }
     .session-item.active { background: #0f3460; color: #53c0f0; }
-    /* メインエリア */
+    /* 主区域 */
     #main {
       flex: 1;
       display: flex;
@@ -139,7 +142,7 @@
     .msg-time { font-size: 10px; color: #555; padding: 0 4px; }
     .msg-usage { font-size: 11px; color: #999; padding: 2px 4px; }
     .msg-usage span { margin-right: 6px; }
-    /* 入力エリア */
+    /* 输入区域 */
     #input-area {
       background: #16213e;
       padding: 10px 12px;
@@ -217,7 +220,7 @@
     #send:disabled { background: #444; color: #888; cursor: not-allowed; }
     #stop { background: #e74c3c; color: #fff; display: none; }
     #stop:hover { background: #c0392b; }
-    /* オーバーレイ（モバイルサイドバー用） */
+    /* 覆盖层（用于移动端侧边栏） */
     #overlay {
       display: none;
       position: fixed;
@@ -225,7 +228,7 @@
       background: rgba(0,0,0,0.5);
       z-index: 9;
     }
-    /* モバイル */
+    /* 移动端 */
     @media (max-width: 768px) {
       #sidebar {
         position: fixed;
@@ -245,8 +248,8 @@
   <div id="overlay" onclick="closeSidebar()"></div>
   <div id="sidebar">
     <div class="top">
-      <button class="new-btn" onclick="newSession()">+ New Chat</button>
-      <input type="text" placeholder="Search..." oninput="filterSessions(this.value)">
+      <button class="new-btn" onclick="newSession()">+ 新建聊天</button>
+      <input type="text" placeholder="搜索..." oninput="filterSessions(this.value)">
     </div>
     <div id="session-list"></div>
   </div>
@@ -254,16 +257,16 @@
     <header>
       <button id="menu-btn" onclick="toggleSidebar()">&#9776;</button>
       <h1>xangi</h1>
-      <span class="session-title" id="session-title" onclick="editTitle()" title="Click to edit title"></span>
+      <span class="session-title" id="session-title" onclick="editTitle()" title="点击编辑标题"></span>
     </header>
     <div id="messages"></div>
     <div id="attach-preview"></div>
     <div id="input-area">
-      <button id="attach-btn" onclick="document.getElementById('file-input').click()" title="Attach file">&#128206;</button>
+      <button id="attach-btn" onclick="document.getElementById('file-input').click()" title="附加文件">&#128206;</button>
       <input type="file" id="file-input" multiple accept="image/*,.pdf,.mp3,.mp4,.wav" onchange="handleFileSelect(event)">
-      <textarea id="input" rows="1" placeholder="Message..." onkeydown="handleKey(event)"></textarea>
-      <button id="send" class="action-btn" onclick="send()">Send</button>
-      <button id="stop" class="action-btn" onclick="stopChat()">Stop</button>
+      <textarea id="input" rows="1" placeholder="消息..." onkeydown="handleKey(event)"></textarea>
+      <button id="send" class="action-btn" onclick="send()">发送</button>
+      <button id="stop" class="action-btn" onclick="stopChat()">停止</button>
     </div>
   </div>
   <script>
@@ -281,7 +284,7 @@
     let abortController = null;
     let pendingFiles = []; // { name, path, localUrl }
 
-    // ─── ファイル添付 ───
+    // ─── 文件附件 ───
     const attachPreview = document.getElementById('attach-preview');
 
     function handleFileSelect(e) {
@@ -304,7 +307,7 @@
           renderAttachPreview();
         }
       } catch(err) {
-        console.error('Upload failed:', err);
+        console.error('上传失败:', err);
       }
     }
 
@@ -329,23 +332,23 @@
       }).join('');
     }
 
-    // ─── サイドバー ───
+    // ─── 侧边栏 ───
     function toggleSidebar() { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); }
     function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
 
-    // ─── メタデータ除去 ───
+    // ─── 去除元数据 ───
     function stripMetadata(text) {
       if (typeof text !== 'string') return String(text);
       return text
-        .replace(/^\[プラットフォーム: [^\]]*\]\n?/m, '')
-        .replace(/^\[チャンネル: [^\]]*\]\n?/m, '')
-        .replace(/^\[発言者: [^\]]*\]\n?/m, '')
-        .replace(/^\[現在時刻: [^\]]*\]\n?/m, '')
-        .replace(/^\[チャンネルID: [^\]]*\]\n?/m, '')
+        .replace(/^\[平台: [^\]]*\]\n?/m, '')
+        .replace(/^\[频道: [^\]]*\]\n?/m, '')
+        .replace(/^\[发言者: [^\]]*\]\n?/m, '')
+        .replace(/^\[当前时间: [^\]]*\]\n?/m, '')
+        .replace(/^\[频道ID: [^\]]*\]\n?/m, '')
         .trim();
     }
 
-    /** MEDIA:パスを画像/音声/動画タグに変換 */
+    /** 将 MEDIA:路径 转换为图片/音频/视频标签 */
     function convertMediaPaths(text) {
       var imgExts = ['.png','.jpg','.jpeg','.gif','.webp'];
       var audioExts = ['.mp3','.wav','.flac'];
@@ -360,14 +363,14 @@
       });
     }
 
-    /** マークダウンレンダリング（marked.js優先、フォールバック付き） */
+    /** Markdown 渲染（优先使用 marked.js，带回退方案） */
     function renderMarkdown(text) {
-      // MEDIA:パスを先に変換
+      // 先转换 MEDIA: 路径
       text = convertMediaPaths(text);
       if (typeof marked !== 'undefined' && marked.parse) {
         try { return marked.parse(text); } catch(e) {}
       }
-      // フォールバック: 最低限のマークダウン変換
+      // 回退方案：最小化的 Markdown 转换
       return text
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
@@ -387,7 +390,7 @@
       return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + h + ':' + m;
     }
 
-    // ─── メッセージ表示 ───
+    // ─── 显示消息 ───
     function addMessage(text, role, opts) {
       opts = opts || {};
       const wrapper = document.createElement('div');
@@ -414,8 +417,8 @@
       if (role === 'assistant' && opts.usage) {
         var u = opts.usage;
         var parts = [];
-        if (u.num_turns != null) parts.push('\u{1F504} ' + u.num_turns + ' turns');
-        if (u.duration_ms != null) parts.push('\u{23F1}\uFE0F ' + (u.duration_ms/1000).toFixed(1) + 's');
+        if (u.num_turns != null) parts.push('\u{1F504} ' + u.num_turns + ' 轮');
+        if (u.duration_ms != null) parts.push('\u{23F1}\uFE0F ' + (u.duration_ms/1000).toFixed(1) + '秒');
         if (u.total_cost_usd != null) parts.push('\u{1F4B0} $' + u.total_cost_usd.toFixed(4));
         if (parts.length > 0) {
           var uel = document.createElement('div');
@@ -430,7 +433,7 @@
       return div;
     }
 
-    // ─── セッション ───
+    // ─── 会话 ───
     async function loadSessions() {
       try {
         var res = await fetch('/api/sessions');
@@ -479,8 +482,8 @@
     function getDateLabel(d) {
       var today = new Date().toISOString().slice(0,10);
       var y = new Date(Date.now()-86400000).toISOString().slice(0,10);
-      if (d === today) return 'Today';
-      if (d === y) return 'Yesterday';
+      if (d === today) return '今天';
+      if (d === y) return '昨天';
       return d;
     }
 
@@ -509,17 +512,17 @@
         if (isActiveWeb) {
           inputEl.disabled = false;
           sendBtn.disabled = false;
-          inputEl.placeholder = 'Message...';
+          inputEl.placeholder = '消息...';
         } else {
           inputEl.disabled = true;
           sendBtn.disabled = true;
-          inputEl.placeholder = 'Read-only';
-          // Web由来のセッションのみResumeボタンを表示（Discordセッションは対象外）
+          inputEl.placeholder = '只读';
+          // 仅限 Web 来源的会话显示恢复按钮（Discord 会话不显示）
           var sessionInfo = allSessions.find(function(s){ return s.id === id; });
           var isWebSession = !sessionInfo || sessionInfo.platform === 'web';
           if (isWebSession) {
             var resumeBtn = document.createElement('button');
-            resumeBtn.textContent = '\u{1F4AC} Resume this session';
+            resumeBtn.textContent = '\u{1F4AC} 恢复此会话';
             resumeBtn.style.cssText = 'background:#0f3460;color:#53c0f0;border:1px solid #53c0f0;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;margin:8px auto;display:block;';
             resumeBtn.onclick = function(){ resumeSession(id); };
             messagesEl.appendChild(resumeBtn);
@@ -528,7 +531,7 @@
       } catch(e) {}
     }
 
-    // ─── 送信 ───
+    // ─── 发送 ───
     function setProcessing(on) {
       sending = on;
       sendBtn.style.display = on ? 'none' : '';
@@ -540,15 +543,15 @@
       var msg = inputEl.value.trim();
       if (!msg || sending) return;
 
-      // 添付ファイルがあればプロンプトに追加
+      // 如果有附件，添加到提示词中
       var fullMsg = msg;
       if (pendingFiles.length > 0) {
-        var attachments = pendingFiles.map(function(f){ return '[添付ファイル] ' + f.path; }).join('\n');
+        var attachments = pendingFiles.map(function(f){ return '[附件] ' + f.path; }).join('\n');
         fullMsg = msg + '\n\n' + attachments;
       }
 
       addMessage(msg, 'user', { createdAt: new Date().toISOString() });
-      // 添付画像のプレビューもメッセージに追加
+      // 同时将附件图片预览添加到消息中
       if (pendingFiles.length > 0) {
         var lastWrapper = messagesEl.lastElementChild;
         if (lastWrapper) {
@@ -574,12 +577,12 @@
       inputEl.style.height = 'auto';
       setProcessing(true);
 
-      // ツール使用表示エリア + ストリーミングテキスト表示エリア
+      // 工具使用显示区域 + 流式文本显示区域
       var toolsWrapper = document.createElement('div');
       toolsWrapper.className = 'msg-wrapper assistant';
       var toolsDiv = document.createElement('div');
       toolsDiv.className = 'msg thinking';
-      toolsDiv.textContent = 'Thinking...';
+      toolsDiv.textContent = '思考中...';
       toolsWrapper.appendChild(toolsDiv);
       messagesEl.appendChild(toolsWrapper);
 
@@ -617,7 +620,7 @@
               try {
                 var d = JSON.parse(line.slice(6));
                 if (eventType === 'text') {
-                  // ストリーミングテキスト表示
+                  // 显示流式文本
                   if (!assistantWrapper) {
                     toolsWrapper.remove();
                     assistantWrapper = document.createElement('div');
@@ -627,23 +630,23 @@
                     assistantWrapper.appendChild(assistantDiv);
                     messagesEl.appendChild(assistantWrapper);
                   }
-                  // ストリーミング中はプレーンテキスト（不完全なMDでmarkedが壊れるのを防ぐ）
+                  // 流式传输时使用纯文本（防止不完整的 Markdown 破坏 marked 渲染）
                   assistantDiv.textContent = d.fullText + ' \u258C';
                   messagesEl.scrollTop = messagesEl.scrollHeight;
                 } else if (eventType === 'tool') {
-                  // 初回ツール: 「Thinking...」テキストを消す
+                  // 首次工具调用：清除“思考中...”文本
                   if (toolHistory.length === 0) {
                     toolsDiv.textContent = '';
                   }
                   toolHistory.push(d.toolName);
-                  // 新しいツール行を追加（上書きしない）
+                  // 添加新的工具行（不覆盖之前的）
                   var toolLine = document.createElement('div');
                   toolLine.style.cssText = 'font-size:12px;color:#888;padding:1px 0;';
                   toolLine.textContent = '\u{1F527} ' + d.toolName + (d.inputSummary || '');
                   toolsDiv.appendChild(toolLine);
                   messagesEl.scrollTop = messagesEl.scrollHeight;
                 } else if (eventType === 'done') {
-                  // 完了: 最終テキストをレンダリング
+                  // 完成：渲染最终文本
                   if (!assistantWrapper) {
                     assistantWrapper = document.createElement('div');
                     assistantWrapper.className = 'msg-wrapper assistant';
@@ -656,7 +659,7 @@
                   if (toolsWrapper.parentElement) toolsWrapper.remove();
                   assistantDiv.style.whiteSpace = 'normal';
                   assistantDiv.innerHTML = renderMarkdown(d.response || '');
-                  // 日時
+                  // 时间
                   var t = document.createElement('div');
                   t.className = 'msg-time';
                   t.textContent = formatTime(new Date().toISOString());
@@ -664,8 +667,8 @@
                   // usage
                   if (d.usage) {
                     var parts = [];
-                    if (d.usage.num_turns != null) parts.push('\u{1F504} ' + d.usage.num_turns + ' turns');
-                    if (d.usage.duration_ms != null) parts.push('\u{23F1}\uFE0F ' + (d.usage.duration_ms/1000).toFixed(1) + 's');
+                    if (d.usage.num_turns != null) parts.push('\u{1F504} ' + d.usage.num_turns + ' 轮');
+                    if (d.usage.duration_ms != null) parts.push('\u{23F1}\uFE0F ' + (d.usage.duration_ms/1000).toFixed(1) + '秒');
                     if (d.usage.total_cost_usd != null) parts.push('\u{1F4B0} $' + d.usage.total_cost_usd.toFixed(4));
                     if (parts.length > 0) {
                       var uel = document.createElement('div');
@@ -678,7 +681,7 @@
                   loadSessions();
                 } else if (eventType === 'error') {
                   toolsWrapper.remove();
-                  addMessage(d.message || 'Error', 'error');
+                  addMessage(d.message || '错误', 'error');
                 }
               } catch(e) {}
               eventType = '';
@@ -688,7 +691,7 @@
       } catch(err) {
         if (toolsWrapper.parentElement) toolsWrapper.remove();
         if (assistantWrapper && assistantWrapper.parentElement) assistantWrapper.remove();
-        addMessage(err.name === 'AbortError' ? 'Stopped' : 'Connection error', 'error');
+        addMessage(err.name === 'AbortError' ? '已停止' : '连接错误', 'error');
       } finally {
         setProcessing(false);
         abortController = null;
@@ -708,7 +711,7 @@
       sessionTitleEl.textContent = '';
       inputEl.disabled = false;
       sendBtn.disabled = false;
-      inputEl.placeholder = 'Message...';
+      inputEl.placeholder = '消息...';
       loadSessions();
       closeSidebar();
       inputEl.focus();
@@ -722,8 +725,8 @@
           currentSessionId = data.sessionId || id;
           inputEl.disabled = false;
           sendBtn.disabled = false;
-          inputEl.placeholder = 'Message...';
-          // Resumeボタンを消す
+          inputEl.placeholder = '消息...';
+          // 移除恢复按钮
           var btns = messagesEl.querySelectorAll('button');
           btns.forEach(function(b){ b.remove(); });
           loadSessions();
@@ -733,7 +736,7 @@
     }
 
     async function deleteSessionById(id) {
-      if (!confirm('Delete this session?')) return;
+      if (!confirm('删除此会话？')) return;
       try {
         await fetch('/api/sessions/' + encodeURIComponent(id), { method: 'DELETE' });
         if (currentSessionId === id) {
@@ -742,7 +745,7 @@
           sessionTitleEl.textContent = '';
           inputEl.disabled = true;
           sendBtn.disabled = true;
-          inputEl.placeholder = 'Select a session or start a new chat';
+          inputEl.placeholder = '请选择会话或开始新聊天';
         }
         loadSessions();
       } catch(e) {}
@@ -751,7 +754,7 @@
     async function editTitle() {
       if (!currentSessionId) return;
       var current = sessionTitleEl.textContent;
-      var t = prompt('Session title:', current);
+      var t = prompt('会话标题：', current);
       if (t && t !== current) {
         await fetch('/api/sessions/' + encodeURIComponent(currentSessionId), {
           method: 'PATCH',
@@ -763,7 +766,7 @@
       }
     }
 
-    // IME変換中のEnterを無視
+    // 忽略 IME 输入法转换中的 Enter 键
     function handleKey(e) {
       if (e.isComposing || e.keyCode === 229) return;
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
@@ -774,12 +777,12 @@
       inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
     });
 
-    // 初期状態: 入力無効、セッション選択またはNew Chatを促す
+    // 初始状态：输入框禁用，提示选择会话或新建聊天
     inputEl.disabled = true;
     sendBtn.disabled = true;
-    inputEl.placeholder = 'Select a session or start a new chat';
-    messagesEl.innerHTML = '<div style="text-align:center;color:#666;padding:40px 20px;font-size:15px;">Select a session from the sidebar<br>or click <strong>+ New Chat</strong></div>';
-    // ドラッグ&ドロップ
+    inputEl.placeholder = '请选择会话或开始新聊天';
+    messagesEl.innerHTML = '<div style="text-align:center;color:#666;padding:40px 20px;font-size:15px;">从侧边栏选择会话<br>或点击 <strong>+ 新建聊天</strong></div>';
+    // 拖放
     document.body.addEventListener('dragover', function(e) { e.preventDefault(); });
     document.body.addEventListener('drop', function(e) {
       e.preventDefault();
@@ -792,3 +795,4 @@
   </script>
 </body>
 </html>
+```
